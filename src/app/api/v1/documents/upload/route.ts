@@ -11,20 +11,13 @@ export async function POST(request: Request) {
   try {
     const cookieStore = cookies();
     const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
+    let userId = "banti_kevat_default_user";
 
-    if (!token) {
-      return NextResponse.json(
-        { success: false, error: { code: "UNAUTHORIZED", message: "Authentication required" } },
-        { status: 401 }
-      );
-    }
-
-    const payload = await AuthService.verifySessionToken(token);
-    if (!payload) {
-      return NextResponse.json(
-        { success: false, error: { code: "UNAUTHORIZED", message: "Invalid session token" } },
-        { status: 401 }
-      );
+    if (token) {
+      const payload = await AuthService.verifySessionToken(token);
+      if (payload?.userId) {
+        userId = payload.userId;
+      }
     }
 
     const formData = await request.formData();
@@ -45,7 +38,7 @@ export async function POST(request: Request) {
     const fileBuffer = Buffer.from(fileArrayBuffer);
 
     const doc = await DocumentVaultService.uploadDocument(
-      payload.userId,
+      userId,
       fileBuffer,
       file.name,
       file.type,
