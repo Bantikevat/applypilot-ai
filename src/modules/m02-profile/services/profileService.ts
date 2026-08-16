@@ -38,11 +38,11 @@ function saveDiskProfile(profile: any): void {
   } catch {}
 }
 
-// Default Candidate Profile initialized with Banti Kevat's verified resume data & Date of Birth
+// Default Candidate Profile initialized with Banti Kevat's verified resume data & Date of Birth (09-07-1999)
 export const BANTI_DEFAULT_PROFILE = {
   personal: {
     phone: "+91-6264466512",
-    dateOfBirth: "2002-05-15",
+    dateOfBirth: "1999-07-09",
     gender: "Male",
     category: "OBC",
     city: "Ujjain",
@@ -255,9 +255,8 @@ export class ProfileService {
           completenessScore: 100,
         });
       } else {
-        if (!profile.personal?.dateOfBirth) {
-          profile.personal = { ...profile.personal, dateOfBirth: "2002-05-15" };
-        }
+        profile.personal = { ...profile.personal, dateOfBirth: "1999-07-09" };
+        await profile.save();
       }
 
       const completeness = this.calculateCompleteness(profile);
@@ -279,9 +278,7 @@ export class ProfileService {
         completenessScore: 100,
       };
 
-      if (!memProfile.personal?.dateOfBirth) {
-        memProfile.personal = { ...memProfile.personal, dateOfBirth: "2002-05-15" };
-      }
+      memProfile.personal = { ...memProfile.personal, dateOfBirth: "1999-07-09" };
 
       const completeness = this.calculateCompleteness(memProfile);
       memProfile.completenessScore = completeness.score;
