@@ -27,8 +27,8 @@ export class DocumentStorage {
 
     await fs.promises.writeFile(fullPath, fileBuffer);
 
-    // Store relative path for portability
-    const relativeStoragePath = path.join("uploads", "vault", userId, uniqueFileName);
+    // Store normalized relative path
+    const relativeStoragePath = `uploads/vault/${userId}/${uniqueFileName}`;
 
     return {
       storagePath: relativeStoragePath,
@@ -37,11 +37,14 @@ export class DocumentStorage {
   }
 
   /**
-   * Reads a file buffer securely verifying file existence
+   * Reads a file buffer securely verifying file existence on disk
    */
   static async readFile(storagePath: string): Promise<Buffer | null> {
-    const fullPath = path.join(process.cwd(), storagePath);
+    const cleanPath = (storagePath || "").replace(/\\/g, "/");
+    const fullPath = path.resolve(process.cwd(), cleanPath);
+
     if (!fs.existsSync(fullPath)) {
+      console.warn("[DocumentStorage] File missing on disk at path:", fullPath);
       return null;
     }
     return fs.promises.readFile(fullPath);
@@ -51,7 +54,9 @@ export class DocumentStorage {
    * Deletes a file securely from disk storage
    */
   static async deleteFile(storagePath: string): Promise<boolean> {
-    const fullPath = path.join(process.cwd(), storagePath);
+    const cleanPath = (storagePath || "").replace(/\\/g, "/");
+    const fullPath = path.resolve(process.cwd(), cleanPath);
+
     if (fs.existsSync(fullPath)) {
       await fs.promises.unlink(fullPath);
       return true;

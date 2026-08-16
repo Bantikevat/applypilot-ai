@@ -14,16 +14,18 @@ export interface ProfileCompletenessResult {
   };
 }
 
-// Default Candidate Profile initialized with Banti Kevat's verified resume data
+// Default Candidate Profile initialized with Banti Kevat's verified resume data & Date of Birth
 export const BANTI_DEFAULT_PROFILE = {
   personal: {
     phone: "+91-6264466512",
+    dateOfBirth: "2002-05-15",
     gender: "Male",
     category: "OBC",
     city: "Ujjain",
     state: "Madhya Pradesh",
     country: "India",
     address: "Ujjain, Madhya Pradesh, India",
+    pincode: "456001",
   },
   education: [
     {
@@ -229,6 +231,11 @@ export class ProfileService {
           ...BANTI_DEFAULT_PROFILE,
           completenessScore: 100,
         });
+      } else {
+        // Ensure dateOfBirth is preserved
+        if (!profile.personal?.dateOfBirth) {
+          profile.personal = { ...profile.personal, dateOfBirth: "2002-05-15" };
+        }
       }
 
       const completeness = this.calculateCompleteness(profile);
@@ -250,6 +257,10 @@ export class ProfileService {
           completenessScore: 100,
         };
         memoryProfiles.set(userId, memProfile);
+      } else {
+        if (!memProfile.personal?.dateOfBirth) {
+          memProfile.personal = { ...memProfile.personal, dateOfBirth: "2002-05-15" };
+        }
       }
 
       const completeness = this.calculateCompleteness(memProfile);

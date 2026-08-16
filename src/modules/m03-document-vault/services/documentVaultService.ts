@@ -42,6 +42,23 @@ export class DocumentVaultService {
 
     const { storagePath } = await DocumentStorage.saveFile(userId, fileBuffer, originalFileName);
 
+    const docId = `doc_${Date.now()}`;
+    const memDoc: MemoryDocument = {
+      _id: docId,
+      userId,
+      category,
+      documentType,
+      originalFileName,
+      mimeType,
+      fileSize: fileBuffer.length,
+      storagePath,
+      verificationStatus: "UNVERIFIED",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    memoryVault.set(docId, memDoc);
+
     const db = await connectToDatabase();
 
     if (db) {
@@ -59,34 +76,19 @@ export class DocumentVaultService {
 
         return newDoc;
       } catch (err) {
-        console.warn("MongoDB offline, saving document metadata in Memory Store:", err);
+        console.warn("MongoDB offline/busy, saved document in Memory Store:", err);
       }
     }
 
-    const docId = `mem_doc_${Date.now()}`;
-    const memDoc: MemoryDocument = {
-      _id: docId,
-      userId,
-      category,
-      documentType,
-      originalFileName,
-      mimeType,
-      fileSize: fileBuffer.length,
-      storagePath,
-      verificationStatus: "UNVERIFIED",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    memoryVault.set(docId, memDoc);
     return memDoc;
   }
 
   /**
-   * Retrieves candidate vault documents filtered by optional category
+   * Retrieves candidate vault documents (merging DB & Memory Vault so no document is ever lost)
    */
   static async getUserDocuments(userId: string, category?: string): Promise<Array<Partial<IDocumentVaultDocument | MemoryDocument>>> {
     const db = await connectToDatabase();
+    const resultsMap = new Map<string, any>();
 
     if (db) {
       try {
@@ -94,20 +96,23 @@ export class DocumentVaultService {
         if (category && category !== "All") {
           query.category = category;
         }
-        return await DocumentVault.find(query).sort({ createdAt: -1 });
-      } catch {
-        console.warn("MongoDB offline, reading from Memory Vault.");
+        const dbDocs = await DocumentVault.find(query).sort({ createdAt: -1 });
+        for (const doc of dbDocs) {
+          resultsMap.set(doc._id.toString(), doc);
+        }
+      } catch (err) {
+        console.warn("MongoDB query warning:", err);
       }
     }
 
-    const results: MemoryDocument[] = [];
-    for (const doc of memoryVault.values()) {
+    for (const [id, doc] of memoryVault.entries()) {
       if (!category || category === "All" || doc.category === category) {
-        results.push(doc);
+        resultsMap.set(id, doc);
       }
     }
 
-    return results.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    const merged = Array.from(resultsMap.values());
+    return merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
   /**
