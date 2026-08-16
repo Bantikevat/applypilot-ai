@@ -5,6 +5,9 @@ export interface ICanonicalJobDocument extends Document {
   company: string;
   location: string;
   employmentType: "Full-time" | "Part-time" | "Contract" | "Government" | "Remote";
+  workMode?: string;
+  sourceCategory?: string;
+  sourceAdapter?: string;
   salaryMin?: number;
   salaryMax?: number;
   salaryCurrency: string;
@@ -37,6 +40,9 @@ const CanonicalJobSchema = new Schema<ICanonicalJobDocument>(
       default: "Full-time",
       index: true,
     },
+    workMode: { type: String, default: "On-site" },
+    sourceCategory: { type: String, index: true },
+    sourceAdapter: { type: String, index: true },
     salaryMin: { type: Number },
     salaryMax: { type: Number },
     salaryCurrency: { type: String, default: "INR" },
@@ -74,8 +80,9 @@ const CanonicalJobSchema = new Schema<ICanonicalJobDocument>(
   },
   {
     timestamps: true,
+    strict: false,
   }
 );
 
 export const CanonicalJob: Model<ICanonicalJobDocument> =
-  mongoose.models.CanonicalJob || mongoose.model<ICanonicalJobDocument>("CanonicalJob", CanonicalJobSchema);
+  mongoose.models.CanonicalJob || mongoose.model<ICanonicalJobDocument>("CanonicalJob", CanonicalJobSchema, "canonicaljobs");

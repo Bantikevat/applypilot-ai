@@ -44,7 +44,7 @@ interface CanonicalJob {
   postedAt: string;
 }
 
-const CATEGORIES = ["All", "Government", "Tech MNCs", "Remote", "WhatsApp & Telegram"];
+const CATEGORIES = ["All", "Government", "Tech MNCs", "Remote", "WhatsApp / Telegram"];
 
 export default function JobsPage() {
   const [activeCategory, setActiveCategory] = useState("All");
@@ -64,7 +64,7 @@ export default function JobsPage() {
   async function fetchJobs() {
     setLoading(true);
     try {
-      let url = `/api/v1/jobs?sourceCategory=${activeCategory}`;
+      let url = `/api/v1/jobs?sourceCategory=${encodeURIComponent(activeCategory)}`;
       if (searchQuery) url += `&q=${encodeURIComponent(searchQuery)}`;
       if (locationQuery) url += `&location=${encodeURIComponent(locationQuery)}`;
 

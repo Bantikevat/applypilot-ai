@@ -8,10 +8,12 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
 
+    const rawCategory = searchParams.get("sourceCategory") || "All";
+
     const rawParams = {
       q: searchParams.get("q") || undefined,
       location: searchParams.get("location") || undefined,
-      sourceCategory: searchParams.get("sourceCategory") || "All",
+      sourceCategory: rawCategory,
       page: Number(searchParams.get("page") || 1),
       limit: Number(searchParams.get("limit") || 12),
     };

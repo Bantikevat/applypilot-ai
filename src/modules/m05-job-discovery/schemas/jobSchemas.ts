@@ -26,12 +26,17 @@ export const canonicalJobInputSchema = z.object({
   source: z.string().min(1, "Source identifier is required"),
   sourceUrl: z.string().url().optional(),
   postedAt: z.string().nullable().optional(),
+  sourceAdapter: z.string().optional(),
+  workMode: z.string().optional(),
+  sourceCategory: z.string().optional(),
+  externalJobId: z.string().optional(),
+  rawPayload: z.any().optional(),
 });
 
 export const jobSearchQuerySchema = z.object({
   q: z.string().optional(),
   location: z.string().optional(),
-  sourceCategory: z.enum(["All", "Government", "Tech MNCs", "Remote", "Startup"]).default("All"),
+  sourceCategory: z.string().default("All"),
   minExperience: z.number().optional(),
   trustBadge: trustBadgeEnum.optional(),
   page: z.number().min(1).default(1),

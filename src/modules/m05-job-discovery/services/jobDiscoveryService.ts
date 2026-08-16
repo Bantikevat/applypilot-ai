@@ -1,86 +1,65 @@
-import crypto from "crypto";
+import { connectToDatabase } from "@/lib/db/mongoose";
 import { CanonicalJob, ICanonicalJobDocument } from "../models/CanonicalJob";
 import { CanonicalJobInput, JobSearchQuery } from "../schemas/jobSchemas";
-import { GovernmentSourceAdapter, CompanyCareerAdapter, JobBoardAdapter, SpecializedRemoteJobAdapter, JobSourceAdapter } from "../adapters/sourceAdapters";
-import { connectToDatabase } from "@/lib/db/mongoose";
+import {
+  GovernmentSourceAdapter,
+  CompanyCareerAdapter,
+  JobBoardAdapter,
+  SpecializedRemoteJobAdapter,
+  JobSourceAdapter,
+} from "../adapters/sourceAdapters";
+import { SocialJobIngestionService } from "./socialJobIngestionService";
 import { NotFoundError } from "@/lib/errors/AppError";
 
-export interface MemoryJob {
+export interface MemoryJob extends CanonicalJobInput {
   _id: string;
-  title: string;
-  company: string;
-  location: string;
-  employmentType: "Full-time" | "Part-time" | "Contract" | "Government" | "Remote";
-  salaryMin?: number;
-  salaryMax?: number;
-  salaryCurrency: string;
-  minExperienceYears: number;
-  maxExperienceYears?: number;
-  educationRequirements: string[];
-  skills: string[];
-  description: string;
-  requirements: string[];
-  applicationUrl: string;
-  source: string;
-  sourceUrl?: string;
   deduplicationHash: string;
   trustScore: number;
   trustBadge: "Verified Official Source" | "High Confidence" | "Needs Verification" | "Suspicious / Application Fee Warning";
   status: "ACTIVE" | "EXPIRED" | "SUSPICIOUS";
-  postedAt: Date | null;
   collectedAt: Date;
   lastVerifiedAt: Date;
 }
 
-const memoryJobs = new Map<string, MemoryJob>();
+// Global In-Memory Cache for dev performance
+const memoryJobs: Map<string, MemoryJob> = new Map();
 
 export class JobDiscoveryService {
   /**
-   * Computes deterministic SHA-256 fingerprint for deduplication
+   * Computes deduplication hash based on company, title, and location
    */
-  static computeDeduplicationHash(company: string, title: string, location: string): string {
-    const cleanCompany = company.toLowerCase().replace(/[^a-z0-9]/g, "");
-    const cleanTitle = title.toLowerCase().replace(/[^a-z0-9]/g, "");
-    const cleanLocation = location.toLowerCase().replace(/[^a-z0-9]/g, "");
-    const raw = `${cleanCompany}:${cleanTitle}:${cleanLocation}`;
-    return crypto.createHash("sha256").update(raw).digest("hex");
+  private static computeDeduplicationHash(company: string, title: string, location: string): string {
+    const raw = `${company.toLowerCase().trim()}_${title.toLowerCase().trim()}_${location.toLowerCase().trim()}`;
+    return raw.replace(/[^a-z0-9_]/g, "");
   }
 
   /**
-   * Calculates Job Quality & Trust Score (0-100%) and assigns Trust Badge
+   * Evaluates trust score and badge for ingested jobs
    */
-  static calculateTrustScore(input: CanonicalJobInput): { trustScore: number; trustBadge: MemoryJob["trustBadge"] } {
-    let score = 70;
+  private static calculateTrustScore(input: CanonicalJobInput): { trustScore: number; trustBadge: "Verified Official Source" | "High Confidence" | "Needs Verification" | "Suspicious / Application Fee Warning" } {
+    let score = 70; // Base score
 
-    // Official Government & Verified Company bonus
-    if (input.source.toLowerCase().includes("ssc") || input.source.toLowerCase().includes("upsc") || input.source.toLowerCase().includes("official")) {
+    if (input.source.includes("gov") || input.source.includes("upsc") || input.source.includes("ssc")) {
       score += 25;
-    } else if (input.source.toLowerCase().includes("careers") || input.source.toLowerCase().includes("google") || input.source.toLowerCase().includes("deepmind")) {
-      score += 20;
     }
 
-    // Detailed requirements & description bonus
-    if (input.description.length > 100) score += 5;
-    if (input.skills.length >= 3) score += 5;
-
-    // Check for suspicious signals
-    const suspiciousKeywords = ["application fee mandatory via gpay", "pay 500 rs registration fee", "part time telegram job"];
-    for (const kw of suspiciousKeywords) {
-      if (input.description.toLowerCase().includes(kw)) {
-        return { trustScore: 10, trustBadge: "Suspicious / Application Fee Warning" };
-      }
+    if (input.applicationUrl && (input.applicationUrl.includes("gov.in") || input.applicationUrl.includes("careers.google.com"))) {
+      score += 10;
     }
 
-    const finalScore = Math.min(100, Math.max(0, score));
+    if (input.source.includes("WhatsApp") || input.source.includes("Telegram")) {
+      score = 85; // High confidence social group ingestion
+    }
 
-    let badge: MemoryJob["trustBadge"] = "Needs Verification";
-    if (finalScore >= 90) {
+    let badge: "Verified Official Source" | "High Confidence" | "Needs Verification" | "Suspicious / Application Fee Warning" = "Needs Verification";
+
+    if (score >= 90) {
       badge = "Verified Official Source";
-    } else if (finalScore >= 75) {
+    } else if (score >= 70) {
       badge = "High Confidence";
     }
 
-    return { trustScore: finalScore, trustBadge: badge };
+    return { trustScore: score, trustBadge: badge };
   }
 
   /**
@@ -111,6 +90,19 @@ export class JobDiscoveryService {
           collectedAt: new Date(),
           lastVerifiedAt: new Date(),
         });
+
+        const memJob: MemoryJob = {
+          _id: (newJob._id || newJob.id).toString(),
+          ...input,
+          deduplicationHash,
+          trustScore,
+          trustBadge,
+          status: trustScore < 30 ? "SUSPICIOUS" : "ACTIVE",
+          postedAt: input.postedAt ? new Date(input.postedAt) : null,
+          collectedAt: new Date(),
+          lastVerifiedAt: new Date(),
+        };
+        memoryJobs.set(memJob._id, memJob);
 
         return newJob;
       } catch (err) {
@@ -150,6 +142,13 @@ export class JobDiscoveryService {
   }
 
   /**
+   * Alias for social job ingestion compatibility
+   */
+  static async ingestCanonicalJob(input: CanonicalJobInput) {
+    return this.ingestJob(input);
+  }
+
+  /**
    * Triggers multi-source sync run across all registered source adapters
    */
   static async syncAllSources(): Promise<{ totalIngested: number }> {
@@ -169,6 +168,14 @@ export class JobDiscoveryService {
       }
     }
 
+    // Sync WhatsApp & Telegram Social Feeds
+    try {
+      const socialJobs = await SocialJobIngestionService.syncSampleSocialFeeds();
+      count += socialJobs.length;
+    } catch (err) {
+      console.warn("Social feed sync warning:", err);
+    }
+
     return { totalIngested: count };
   }
 
@@ -176,21 +183,30 @@ export class JobDiscoveryService {
    * Searches canonical jobs with category, location, and query filters
    */
   static async searchJobs(query: JobSearchQuery): Promise<{ jobs: Array<Partial<ICanonicalJobDocument | MemoryJob>>; total: number }> {
-    // Ensure initial sync has run
     if (memoryJobs.size === 0) {
       await this.syncAllSources();
     }
+
+    const cat = (query.sourceCategory || "").toLowerCase().trim();
 
     const db = await connectToDatabase();
     if (db) {
       try {
         const filter: Record<string, unknown> = {};
-        if (query.sourceCategory === "Government") {
+
+        if (cat === "government") {
           filter.employmentType = "Government";
-        } else if (query.sourceCategory === "Tech MNCs") {
+        } else if (cat === "tech mncs") {
           filter.source = { $regex: "Google|DeepMind|Tech", $options: "i" };
-        } else if (query.sourceCategory === "Remote") {
+        } else if (cat === "remote") {
           filter.employmentType = "Remote";
+        } else if (cat.includes("whatsapp") || cat.includes("telegram") || cat.includes("social")) {
+          filter.$or = [
+            { sourceCategory: { $regex: "WhatsApp|Telegram", $options: "i" } },
+            { source: { $regex: "WhatsApp|Telegram", $options: "i" } },
+            { sourceAdapter: { $regex: "WhatsApp|Telegram", $options: "i" } },
+            { company: { $regex: "WhatsApp|Telegram", $options: "i" } },
+          ];
         }
 
         if (query.q) {
@@ -207,21 +223,31 @@ export class JobDiscoveryService {
           .skip((query.page - 1) * query.limit)
           .limit(query.limit);
 
-        return { jobs, total };
+        if (jobs && jobs.length > 0) {
+          return { jobs, total };
+        }
       } catch (err) {
-        console.warn("MongoDB offline, searching Memory Store:", err);
+        console.warn("MongoDB query warning:", err);
       }
     }
 
     // In-Memory Dev Store fallback search
     let items = Array.from(memoryJobs.values());
 
-    if (query.sourceCategory === "Government") {
+    if (cat === "government") {
       items = items.filter((j) => j.employmentType === "Government");
-    } else if (query.sourceCategory === "Tech MNCs") {
+    } else if (cat === "tech mncs") {
       items = items.filter((j) => /google|deepmind|tech/i.test(j.source));
-    } else if (query.sourceCategory === "Remote") {
+    } else if (cat === "remote") {
       items = items.filter((j) => j.employmentType === "Remote");
+    } else if (cat.includes("whatsapp") || cat.includes("telegram") || cat.includes("social")) {
+      items = items.filter(
+        (j) =>
+          /whatsapp|telegram/i.test(j.source || "") ||
+          /whatsapp|telegram/i.test(j.sourceCategory || "") ||
+          /whatsapp|telegram/i.test(j.company || "") ||
+          (j.sourceAdapter && /whatsapp|telegram/i.test(j.sourceAdapter))
+      );
     }
 
     if (query.q) {
@@ -245,7 +271,6 @@ export class JobDiscoveryService {
    * Retrieves single canonical job by ID
    */
   static async getJobById(jobId: string): Promise<Partial<ICanonicalJobDocument | MemoryJob>> {
-    // Ensure initial sync
     if (memoryJobs.size === 0) {
       await this.syncAllSources();
     }
@@ -256,14 +281,13 @@ export class JobDiscoveryService {
         const job = await CanonicalJob.findById(jobId);
         if (job) return job;
       } catch {
-        // Fallback to memory
+        // Fallback
       }
     }
 
     const memJob = memoryJobs.get(jobId);
     if (memJob) return memJob;
 
-    // Default search by id string matching
     for (const j of memoryJobs.values()) {
       if (j._id === jobId) return j;
     }
