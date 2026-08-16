@@ -3,7 +3,7 @@ import { z } from "zod";
 export const formFieldInputSchema = z.object({
   fieldIdentifier: z.string().min(1, "Field identifier is required"),
   label: z.string().optional(),
-  inputType: z.string().default("text"),
+  inputType: z.string().optional().default("text"),
   isRequired: z.boolean().default(false),
 });
 

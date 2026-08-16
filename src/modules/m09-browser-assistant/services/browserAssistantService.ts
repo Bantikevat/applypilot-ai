@@ -22,13 +22,13 @@ const activeAssistantSessions = new Map<string, AssistantSession>();
 const portalSessionCooldowns = new Map<string, number>();
 
 const DEFAULT_PORTAL_FORM_FIELDS: FormFieldInput[] = [
-  { fieldIdentifier: "full_name", label: "Full Name", isRequired: true },
-  { fieldIdentifier: "user.email", label: "Email Address", isRequired: true },
-  { fieldIdentifier: "personal.phone", label: "Mobile Number", isRequired: true },
-  { fieldIdentifier: "dob", label: "Date of Birth", isRequired: true },
-  { fieldIdentifier: "highest_qualification", label: "Degree / Qualification", isRequired: true },
-  { fieldIdentifier: "vault.Resume", label: "Resume CV Attachment", isRequired: true },
-  { fieldIdentifier: "vault.Photograph", label: "Passport Photo File", isRequired: true },
+  { fieldIdentifier: "full_name", label: "Full Name", inputType: "text", isRequired: true },
+  { fieldIdentifier: "user.email", label: "Email Address", inputType: "text", isRequired: true },
+  { fieldIdentifier: "personal.phone", label: "Mobile Number", inputType: "text", isRequired: true },
+  { fieldIdentifier: "dob", label: "Date of Birth", inputType: "text", isRequired: true },
+  { fieldIdentifier: "highest_qualification", label: "Degree / Qualification", inputType: "text", isRequired: true },
+  { fieldIdentifier: "vault.Resume", label: "Resume CV Attachment", inputType: "file", isRequired: true },
+  { fieldIdentifier: "vault.Photograph", label: "Passport Photo File", inputType: "file", isRequired: true },
 ];
 
 export class BrowserAssistantService {
