@@ -1,4 +1,5 @@
 import { FormIntelligenceService } from "@/modules/m08-form-intelligence/services/formIntelligenceService";
+import { FormFieldInput } from "@/modules/m08-form-intelligence/schemas/formSchemas";
 import { AssistantStep } from "../schemas/assistantSchemas";
 import { NotFoundError, ValidationError } from "@/lib/errors/AppError";
 
@@ -19,28 +20,37 @@ export interface AssistantSession {
 
 const activeAssistantSessions = new Map<string, AssistantSession>();
 
-const SAMPLE_PORTAL_FORM_FIELDS = [
-  { fieldIdentifier: "full_name", label: "Full Name", inputType: "text", isRequired: true },
-  { fieldIdentifier: "email_address", label: "Email Address", inputType: "text", isRequired: true },
-  { fieldIdentifier: "mobile_no", label: "Mobile Number", inputType: "text", isRequired: true },
-  { fieldIdentifier: "dob", label: "Date of Birth", inputType: "text", isRequired: true },
-  { fieldIdentifier: "highest_qualification", label: "Degree / Qualification", inputType: "text", isRequired: true },
-  { fieldIdentifier: "upload_resume", label: "Resume CV Attachment", inputType: "file", isRequired: true },
-  { fieldIdentifier: "passport_photo", label: "Passport Photo File", inputType: "file", isRequired: true },
+const DEFAULT_PORTAL_FORM_FIELDS: FormFieldInput[] = [
+  { fieldIdentifier: "full_name", label: "Full Name", isRequired: true },
+  { fieldIdentifier: "user.email", label: "Email Address", isRequired: true },
+  { fieldIdentifier: "personal.phone", label: "Mobile Number", isRequired: true },
+  { fieldIdentifier: "dob", label: "Date of Birth", isRequired: true },
+  { fieldIdentifier: "highest_qualification", label: "Degree / Qualification", isRequired: true },
+  { fieldIdentifier: "vault.Resume", label: "Resume CV Attachment", isRequired: true },
+  { fieldIdentifier: "vault.Photograph", label: "Passport Photo File", isRequired: true },
 ];
 
 export class BrowserAssistantService {
   /**
    * Initiates a new client-assisted browser application session
    */
-  static async startSession(userId: string, targetPortalUrl: string, portalName: string, jobId?: string): Promise<AssistantSession> {
-    const sessionId = `asst_sess_${Date.now()}`;
+  static async startSession(
+    userId: string,
+    targetPortalUrl: string,
+    portalName: string,
+    jobId?: string,
+    customFormFields?: FormFieldInput[]
+  ): Promise<AssistantSession> {
+    const sessionId = `asst_sess_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const fieldsToUse = Array.isArray(customFormFields) && customFormFields.length > 0
+      ? customFormFields
+      : DEFAULT_PORTAL_FORM_FIELDS;
 
     // Generate Pre-fill Plan via Module M08 Form Intelligence
     const preFillPlan = await FormIntelligenceService.generatePreFillPlan(
       userId,
       portalName,
-      SAMPLE_PORTAL_FORM_FIELDS
+      fieldsToUse
     );
 
     const session: AssistantSession = {
@@ -49,7 +59,7 @@ export class BrowserAssistantService {
       jobId,
       targetPortalUrl,
       portalName,
-      currentStep: "AWAITING_HUMAN_REVIEW", // Pauses at HITL Gate by default
+      currentStep: "AWAITING_HUMAN_REVIEW", // Mandatory HITL Safety Gate Pause
       hitlProtectionActive: true,
       preFillPlan,
       candidateApproved: false,
@@ -65,7 +75,12 @@ export class BrowserAssistantService {
   /**
    * Candidate HITL Confirmation Gate: Updates field overrides & approves form injection
    */
-  static async confirmHumanStep(sessionId: string, userId: string, modifiedFields?: Record<string, string>, candidateApproved = true): Promise<AssistantSession> {
+  static async confirmHumanStep(
+    sessionId: string,
+    userId: string,
+    modifiedFields?: Record<string, string>,
+    candidateApproved = true
+  ): Promise<AssistantSession> {
     const session = activeAssistantSessions.get(sessionId);
 
     if (!session) {
@@ -83,6 +98,7 @@ export class BrowserAssistantService {
           item.mappedValue = modifiedFields[item.fieldIdentifier];
           item.confidenceScore = 100;
           item.confidenceBadge = "HIGH_CONFIDENCE (100%) (Candidate Edit)";
+          item.sourceModule = "M02 Master Profile";
         }
       }
     }
@@ -114,21 +130,21 @@ export class BrowserAssistantService {
    */
   private static generateDOMInjectionScript(planItems: any[]): string {
     const scriptLines = [
-      "// ApplyPilot AI — Browser Application Assistant Auto-Fill Injection",
-      "// HITL Safeguard: Form submission and payment gateways require explicit human click.",
+      "// ApplyPilot AI — Browser Application Assistant Auto-Fill Injection Script",
+      "// HITL Safeguard: Final form submission and payment processing REQUIRE explicit candidate action.",
       "(function preFillTargetForm() {",
       "  const plan = " + JSON.stringify(planItems, null, 2) + ";",
       "  plan.forEach(item => {",
       "    if (!item.mappedValue) return;",
-      "    const el = document.querySelector(`[name='${item.fieldIdentifier}'], #${item.fieldIdentifier}`);",
+      "    const el = document.querySelector(`[name='${item.fieldIdentifier}'], #${item.fieldIdentifier}, [data-automation-id='${item.fieldIdentifier}']`);",
       "    if (el) {",
       "      el.value = item.mappedValue;",
       "      el.dispatchEvent(new Event('input', { bubbles: true }));",
       "      el.dispatchEvent(new Event('change', { bubbles: true }));",
-      "      console.log(`[ApplyPilot AI] Pre-filled ${item.fieldIdentifier}`);",
+      "      console.log(`[ApplyPilot AI] Pre-filled field: ${item.canonicalName} (${item.fieldIdentifier})`);",
       "    }",
       "  });",
-      "  console.log('[ApplyPilot AI] Form pre-fill completed cleanly. Please review before final submit!');",
+      "  console.log('[ApplyPilot AI] Auto-fill completed cleanly. Please review all fields before clicking Submit.');",
       "})();",
     ];
     return scriptLines.join("\n");
