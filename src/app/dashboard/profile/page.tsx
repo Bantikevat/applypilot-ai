@@ -704,10 +704,13 @@ export default function ProfilePage() {
           {activeTab === "experience" && (
             <div className="glass-panel p-8 rounded-lg border border-white/10 space-y-6">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-bold text-text-main">Work Experience</h3>
+                <div>
+                  <h3 className="text-lg font-bold text-text-main">Work Experience & Employment History</h3>
+                  <p className="text-xs text-text-muted">Add your past or current job roles, start & end dates, and key accomplishments</p>
+                </div>
                 <button
                   onClick={addExperience}
-                  className="px-3 py-1.5 rounded-md bg-primary/20 border border-primary/30 text-primary text-xs font-semibold flex items-center gap-1.5 hover:bg-primary/30"
+                  className="px-3.5 py-2 rounded-md bg-primary/20 border border-primary/40 text-primary text-xs font-semibold flex items-center gap-1.5 hover:bg-primary/30 transition-all shadow-glow"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Add Experience</span>
@@ -715,49 +718,52 @@ export default function ProfilePage() {
               </div>
 
               {experience.length === 0 ? (
-                <p className="text-sm text-text-muted italic">No work experience added yet. Click above to add company roles.</p>
+                <p className="text-sm text-text-muted italic">No work experience added yet. Click above to add past or present employment details.</p>
               ) : (
                 <div className="space-y-4">
                   {experience.map((item, idx) => (
-                    <div key={idx} className="p-4 rounded-md bg-surface-1/60 border border-white/5 space-y-3 relative">
+                    <div key={idx} className="p-5 rounded-lg bg-surface-1/70 border border-white/10 space-y-4 relative shadow-md">
                       <button
                         onClick={() => removeExperience(idx)}
-                        className="absolute top-4 right-4 text-text-subtle hover:text-accent-danger"
+                        className="absolute top-4 right-4 text-text-subtle hover:text-accent-danger transition-colors p-1"
+                        title="Remove Experience"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                         <div>
-                          <label className="text-xs text-text-muted">Company Name</label>
+                          <label className="text-xs font-semibold text-text-muted uppercase tracking-wider">Company Name</label>
                           <input
                             type="text"
+                            placeholder="e.g. Google / Microsoft / Startup"
                             value={item.company}
                             onChange={(e) => {
                               const copy = [...experience];
                               copy[idx].company = e.target.value;
                               setExperience(copy);
                             }}
-                            className="w-full px-3 py-2 rounded-sm bg-surface-1 border border-white/10 text-sm text-text-main focus:border-primary"
+                            className="w-full px-3 py-2 rounded bg-surface-1 border border-white/10 text-sm text-text-main focus:border-primary placeholder-text-subtle"
                           />
                         </div>
 
                         <div>
-                          <label className="text-xs text-text-muted">Job Role / Title</label>
+                          <label className="text-xs font-semibold text-text-muted uppercase tracking-wider">Job Role / Title</label>
                           <input
                             type="text"
+                            placeholder="e.g. Senior Software Engineer"
                             value={item.role}
                             onChange={(e) => {
                               const copy = [...experience];
                               copy[idx].role = e.target.value;
                               setExperience(copy);
                             }}
-                            className="w-full px-3 py-2 rounded-sm bg-surface-1 border border-white/10 text-sm text-text-main focus:border-primary"
+                            className="w-full px-3 py-2 rounded bg-surface-1 border border-white/10 text-sm text-text-main focus:border-primary placeholder-text-subtle"
                           />
                         </div>
 
                         <div>
-                          <label className="text-xs text-text-muted">Start Date</label>
+                          <label className="text-xs font-semibold text-text-muted uppercase tracking-wider">Start Date</label>
                           <input
                             type="date"
                             value={item.startDate}
@@ -766,9 +772,69 @@ export default function ProfilePage() {
                               copy[idx].startDate = e.target.value;
                               setExperience(copy);
                             }}
-                            className="w-full px-3 py-2 rounded-sm bg-surface-1 border border-white/10 text-sm text-text-main focus:border-primary"
+                            className="w-full px-3 py-2 rounded bg-surface-1 border border-white/10 text-sm text-text-main focus:border-primary"
                           />
                         </div>
+
+                        <div>
+                          <label className="text-xs font-semibold text-text-muted uppercase tracking-wider">
+                            {item.isCurrent ? "End Date (Present)" : "End Date"}
+                          </label>
+                          <input
+                            type="date"
+                            disabled={item.isCurrent}
+                            value={item.isCurrent ? "" : item.endDate || ""}
+                            onChange={(e) => {
+                              const copy = [...experience];
+                              copy[idx].endDate = e.target.value;
+                              setExperience(copy);
+                            }}
+                            className="w-full px-3 py-2 rounded bg-surface-1 border border-white/10 text-sm text-text-main focus:border-primary disabled:opacity-40 disabled:cursor-not-allowed"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Currently Working Checkbox Row */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-white/5">
+                        <label className="flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-primary hover:text-white transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={item.isCurrent || false}
+                            onChange={(e) => {
+                              const copy = [...experience];
+                              copy[idx].isCurrent = e.target.checked;
+                              if (e.target.checked) {
+                                copy[idx].endDate = "";
+                              }
+                              setExperience(copy);
+                            }}
+                            className="w-4 h-4 rounded border-white/20 bg-surface-1 text-primary focus:ring-primary focus:ring-offset-background cursor-pointer"
+                          />
+                          <span>💼 Currently Working Here (Present Employer)</span>
+                        </label>
+
+                        {item.isCurrent && (
+                          <span className="px-3 py-1 rounded-full bg-accent-success/20 border border-accent-success/40 text-accent-success text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-sm">
+                            <span className="w-2 h-2 rounded-full bg-accent-success animate-pulse"></span>
+                            <span>Present Role ({item.startDate ? `Since ${item.startDate}` : "Active"})</span>
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Responsibilities & Achievements */}
+                      <div className="space-y-1.5 pt-2">
+                        <label className="text-xs font-semibold text-text-muted uppercase tracking-wider">Key Responsibilities & Achievements</label>
+                        <textarea
+                          rows={2}
+                          placeholder="e.g. Led fullstack development of Next.js microservices, optimized SQL queries by 45%..."
+                          value={item.responsibilities || ""}
+                          onChange={(e) => {
+                            const copy = [...experience];
+                            copy[idx].responsibilities = e.target.value;
+                            setExperience(copy);
+                          }}
+                          className="w-full px-3 py-2 rounded bg-surface-1 border border-white/10 text-xs text-text-main placeholder-text-subtle focus:border-primary resize-none"
+                        />
                       </div>
                     </div>
                   ))}
