@@ -20,6 +20,8 @@ import {
   MessageSquare,
   Send,
   Radio,
+  ClipboardPaste,
+  PlusCircle,
 } from "lucide-react";
 
 interface CanonicalJob {
@@ -56,6 +58,14 @@ export default function JobsPage() {
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState("");
   const [selectedJob, setSelectedJob] = useState<CanonicalJob | null>(null);
+
+  // Social Ingestion Modal State
+  const [pasteModalOpen, setPasteModalOpen] = useState(false);
+  const [socialSource, setSocialSource] = useState<"TELEGRAM" | "WHATSAPP">("TELEGRAM");
+  const [groupName, setGroupName] = useState("MERN stack Developers");
+  const [rawText, setRawText] = useState("");
+  const [ingesting, setIngesting] = useState(false);
+  const [ingestSuccess, setIngestSuccess] = useState("");
 
   useEffect(() => {
     fetchJobs();
@@ -104,6 +114,41 @@ export default function JobsPage() {
     }
   };
 
+  const handleSocialIngestSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rawText.trim()) return;
+
+    setIngesting(true);
+    setIngestSuccess("");
+    try {
+      const endpoint = socialSource === "TELEGRAM" ? "/api/v1/jobs/telegram-webhook" : "/api/v1/jobs/whatsapp-webhook";
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messageText: rawText,
+          groupName: groupName || (socialSource === "TELEGRAM" ? "Telegram Job Channel" : "WhatsApp Job Group"),
+          senderName: "Banti Direct Paste",
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setIngestSuccess(`SUCCESS! Job extracted from ${socialSource} post and saved to Live Database!`);
+        setRawText("");
+        fetchJobs();
+        setTimeout(() => {
+          setIngestSuccess("");
+          setPasteModalOpen(false);
+        }, 2000);
+      }
+    } catch (err) {
+      console.error("Social job paste ingestion failed:", err);
+    } finally {
+      setIngesting(false);
+    }
+  };
+
   const formatSalary = (min?: number, max?: number, curr = "INR") => {
     if (!min && !max) return "Competitive Market Package";
     if (min && max) return `${curr} ${min.toLocaleString()} - ${max.toLocaleString()}`;
@@ -125,15 +170,25 @@ export default function JobsPage() {
           </div>
         </div>
 
-        {/* Sync Feed Button */}
-        <button
-          onClick={handleSync}
-          disabled={syncing}
-          className="btn-glow px-4 py-2 rounded-md text-white text-xs font-bold shadow-luxury disabled:opacity-50 flex items-center gap-2 cursor-pointer"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
-          <span>{syncing ? "Syncing All 4 Job Sources..." : "Run Multi-Source Ingestion Sync"}</span>
-        </button>
+        {/* Action Buttons */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setPasteModalOpen(true)}
+            className="px-4 py-2 rounded-md bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-bold shadow-luxury flex items-center gap-2 cursor-pointer transition-all"
+          >
+            <ClipboardPaste className="w-4 h-4 text-yellow-300 animate-bounce" />
+            <span>Paste Telegram / WhatsApp Job Post</span>
+          </button>
+
+          <button
+            onClick={handleSync}
+            disabled={syncing}
+            className="btn-glow px-4 py-2 rounded-md text-white text-xs font-bold shadow-luxury disabled:opacity-50 flex items-center gap-2 cursor-pointer"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
+            <span>{syncing ? "Syncing..." : "Multi-Source Sync"}</span>
+          </button>
+        </div>
       </header>
 
       {/* Main Container */}
@@ -151,32 +206,38 @@ export default function JobsPage() {
           <div className="space-y-2 text-center md:text-left">
             <div className="flex items-center justify-center md:justify-start gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wider">
               <Radio className="w-4 h-4 animate-pulse" />
-              <span>WhatsApp & Telegram Group Real-Time Ingestion Active</span>
+              <span>Telegram Groups & WhatsApp Channel Real-Time Ingestion Active</span>
             </div>
             <h2 className="text-lg sm:text-xl font-extrabold text-white">
-              Social Job Group Ingester: <span className="text-emerald-400">WhatsApp & Telegram Live Webhooks</span>
+              Telegram & WhatsApp Job Ingester: <span className="text-emerald-400">Copy-Paste or Auto-Sync</span>
             </h2>
             <p className="text-xs text-text-muted max-w-3xl">
-              Job alerts received in your WhatsApp Groups and Telegram Channels are parsed via RegEx NLP and converted into Canonical Jobs for 1-click application and AI matching!
+              Found a job post in **MERN stack Developers**, **KickCharm**, **MentorSetu**, or WhatsApp? Click **"Paste Telegram / WhatsApp Job Post"** above or view synced social jobs below!
             </p>
           </div>
 
           <div className="flex items-center gap-3 border-t md:border-t-0 md:border-l border-white/10 pt-4 md:pt-0 md:pl-6 flex-shrink-0">
-            <div className="p-3 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-2">
-              <MessageSquare className="w-5 h-5" />
+            <button
+              onClick={() => setPasteModalOpen(true)}
+              className="p-3 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 flex items-center gap-2.5 transition-all cursor-pointer"
+            >
+              <Send className="w-5 h-5 text-cyan-400" />
               <div className="text-left">
-                <span className="text-xs font-bold block">WhatsApp Bot</span>
-                <span className="text-[10px] font-mono text-emerald-300 block">Webhook Active</span>
+                <span className="text-xs font-bold block">Telegram Posts</span>
+                <span className="text-[10px] font-mono text-cyan-300 block">+ Paste & Parse Job</span>
               </div>
-            </div>
+            </button>
 
-            <div className="p-3 rounded-lg bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 flex items-center gap-2">
-              <Send className="w-5 h-5" />
+            <button
+              onClick={() => setPasteModalOpen(true)}
+              className="p-3 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 flex items-center gap-2.5 transition-all cursor-pointer"
+            >
+              <MessageSquare className="w-5 h-5 text-emerald-400" />
               <div className="text-left">
-                <span className="text-xs font-bold block">Telegram Bot</span>
-                <span className="text-[10px] font-mono text-cyan-300 block">Channel Ingest</span>
+                <span className="text-xs font-bold block">WhatsApp Groups</span>
+                <span className="text-[10px] font-mono text-emerald-300 block">+ Paste & Parse Job</span>
               </div>
-            </div>
+            </button>
           </div>
         </div>
 
@@ -187,7 +248,7 @@ export default function JobsPage() {
               <Search className="w-4 h-4 text-text-subtle absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Search job title, skills, or company (e.g. MERN, AI Engineer, Next.js, Google)..."
+                placeholder="Search job title, skills, or company (e.g. MERN, TCS NQT, Fullstack AI, Next.js)..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-9 pr-4 py-2.5 rounded-md bg-surface-1 border border-white/10 text-xs text-text-main focus:outline-none focus:border-primary font-semibold"
@@ -198,7 +259,7 @@ export default function JobsPage() {
               <MapPin className="w-4 h-4 text-text-subtle absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Location (e.g. Remote, Ujjain, Bangalore)..."
+                placeholder="Location (e.g. Remote, Ujjain, Bhopal)..."
                 value={locationQuery}
                 onChange={(e) => setLocationQuery(e.target.value)}
                 className="w-full pl-9 pr-4 py-2.5 rounded-md bg-surface-1 border border-white/10 text-xs text-text-main focus:outline-none focus:border-primary font-semibold"
@@ -236,7 +297,7 @@ export default function JobsPage() {
           <div className="p-12 text-center text-text-muted text-sm glass-panel rounded-lg border border-white/10 space-y-3">
             <Briefcase className="w-12 h-12 text-text-subtle mx-auto" />
             <p className="font-semibold text-text-main">No job postings found for current search filters</p>
-            <p className="text-xs text-text-subtle">Click "Run Multi-Source Ingestion Sync" above to fetch latest job notices from Govt, MNC, Remote, WhatsApp & Telegram sources.</p>
+            <p className="text-xs text-text-subtle">Click "Paste Telegram / WhatsApp Job Post" above or click "Multi-Source Sync" to fetch live notices.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -312,6 +373,94 @@ export default function JobsPage() {
           </div>
         )}
       </main>
+
+      {/* Paste Social Job Post Modal */}
+      {pasteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="glass-panel p-6 sm:p-8 rounded-xl border border-primary/40 w-full max-w-lg space-y-6 relative shadow-luxury">
+            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+              <div className="flex items-center gap-2 text-base font-bold text-text-main">
+                <ClipboardPaste className="w-5 h-5 text-primary" />
+                <span>Parse Job Post from Telegram or WhatsApp</span>
+              </div>
+              <button onClick={() => setPasteModalOpen(false)} className="p-1.5 rounded-full hover:bg-white/10 text-text-muted cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {ingestSuccess && (
+              <div className="p-4 rounded-md bg-accent-success/10 border border-accent-success/30 text-accent-success text-xs font-bold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                <span>{ingestSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSocialIngestSubmit} className="space-y-4">
+              {/* Source Toggle */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-text-muted uppercase">Select Platform Source</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setSocialSource("TELEGRAM")}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold border flex items-center justify-center gap-2 cursor-pointer transition-all ${
+                      socialSource === "TELEGRAM" ? "bg-cyan-500/20 border-cyan-400 text-cyan-300" : "bg-surface-1 border-white/10 text-text-muted"
+                    }`}
+                  >
+                    <Send className="w-4 h-4" />
+                    <span>Telegram Channel</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSocialSource("WHATSAPP")}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold border flex items-center justify-center gap-2 cursor-pointer transition-all ${
+                      socialSource === "WHATSAPP" ? "bg-emerald-500/20 border-emerald-400 text-emerald-300" : "bg-surface-1 border-white/10 text-text-muted"
+                    }`}
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                    <span>WhatsApp Group</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Group / Channel Name */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-text-muted uppercase">Group / Channel Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. MERN stack Developers, KickCharm, MentorSetu"
+                  value={groupName}
+                  onChange={(e) => setGroupName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-lg bg-surface-1 border border-white/10 text-xs text-text-main font-semibold focus:border-primary focus:outline-none"
+                />
+              </div>
+
+              {/* Message Text Area */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-text-muted uppercase">Paste Message Text from Telegram / WhatsApp</label>
+                <textarea
+                  rows={5}
+                  required
+                  placeholder="Paste raw message text here... (e.g. Urgent Hiring: Senior MERN Developer at TechFlow Solutions. Location: Remote / Bhopal. Salary: 15 LPA. Apply at https://...)"
+                  value={rawText}
+                  onChange={(e) => setRawText(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-lg bg-surface-1 border border-white/10 text-xs text-text-main font-mono focus:border-primary focus:outline-none leading-relaxed"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={ingesting}
+                className="btn-glow w-full py-3 rounded-lg font-bold text-xs text-white shadow-luxury disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <PlusCircle className={`w-4 h-4 ${ingesting ? "animate-spin" : ""}`} />
+                <span>{ingesting ? "AI Extracting Job Details..." : "AI RegEx Parse & Save to Dashboard"}</span>
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Job Details Modal */}
       {selectedJob && (
