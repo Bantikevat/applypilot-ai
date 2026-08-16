@@ -88,29 +88,55 @@ describe("M06 — AI Job Matching & Eligibility Unit & Service Tests", () => {
     expect(result.eligibilityVerdict).not.toBe("ELIGIBLE");
   });
 
-  it("should prevent false positive skill matches using exact word boundaries (Java vs JavaScript)", () => {
-    const javaDev = {
+  it("should pass Education factor for 10+2 / Higher Secondary SSC notices", () => {
+    const candidateWith12th = {
+      personalInfo: { city: "Delhi" },
+      education: [{ degree: "Higher Secondary (10+2)" }],
+      experience: [],
+      skills: [],
+    };
+
+    const sscJob = {
+      _id: "ssc_chsl_1",
+      title: "Data Entry Operator",
+      company: "SSC CHSL",
+      location: "Delhi",
+      employmentType: "Government",
+      minExperienceYears: 0,
+      educationRequirements: ["12th Pass / Higher Secondary"],
+      skills: [],
+    };
+
+    const result = JobMatchingService.evaluateMatch(candidateWith12th, sscJob);
+
+    const eduFactor = result.factors.find((f) => f.factor === "Education");
+    expect(eduFactor?.passed).toBe(true);
+    expect(eduFactor?.score).toBe(25);
+  });
+
+  it("should prevent false positive skill matches for punctuated skills (C vs C++ vs C#)", () => {
+    const cppDev = {
       personalInfo: { city: "Bangalore" },
       education: [{ degree: "B.Tech" }],
       experience: [],
-      skills: ["Java"], // ONLY Java, not JavaScript
+      skills: ["C++"], // Candidate has ONLY C++, NOT C or C#
     };
 
-    const jsJob = {
-      _id: "frontend_job",
-      title: "Frontend Developer",
-      company: "Tech Corp",
+    const cJob = {
+      _id: "c_embedded_job",
+      title: "Embedded C Developer",
+      company: "Systems Corp",
       location: "Remote",
       employmentType: "Full-time",
       minExperienceYears: 0,
       educationRequirements: [],
-      skills: ["JavaScript"],
+      skills: ["C"],
     };
 
-    const result = JobMatchingService.evaluateMatch(javaDev, jsJob);
+    const result = JobMatchingService.evaluateMatch(cppDev, cJob);
 
-    expect(result.matchedSkills).not.toContain("JavaScript");
-    expect(result.missingSkills).toContain("JavaScript");
+    expect(result.matchedSkills).not.toContain("C");
+    expect(result.missingSkills).toContain("C");
   });
 
   it("should respect Category age relaxation for OBC/SC/ST candidates on Government jobs", () => {

@@ -26,6 +26,21 @@ export interface JobMatchResult {
 
 export class JobMatchingService {
   /**
+   * Normalizes technical skill names & handles special punctuation tokens (c++, c#, .net)
+   */
+  private static normalizeSkillToken(skill: string): string {
+    return skill
+      .trim()
+      .toLowerCase()
+      .replace(/c\+\+/g, "cplusplus")
+      .replace(/c#/g, "csharp")
+      .replace(/\.net/g, "dotnet")
+      .replace(/node\.js/g, "nodejs")
+      .replace(/react\.js/g, "reactjs")
+      .replace(/vue\.js/g, "vuejs");
+  }
+
+  /**
    * Calculates candidate age from Date of Birth string
    */
   static calculateAge(dateOfBirth?: string): number | null {
@@ -91,7 +106,30 @@ export class JobMatchingService {
             if (candidateDegree.includes(reqLower) || reqLower.includes(candidateDegree)) {
               return true;
             }
-            // Degree equivalence rules
+            // 10+2 / Higher Secondary / SSC Tier
+            if (reqLower.includes("10+2") || reqLower.includes("12th") || reqLower.includes("higher secondary") || reqLower.includes("intermediate")) {
+              return (
+                candidateDegree.includes("12th") ||
+                candidateDegree.includes("10+2") ||
+                candidateDegree.includes("higher secondary") ||
+                candidateDegree.includes("intermediate") ||
+                candidateDegree.includes("diploma") ||
+                candidateDegree.includes("b.tech") ||
+                candidateDegree.includes("bachelor") ||
+                candidateDegree.includes("graduation")
+              );
+            }
+            // Diploma Tier
+            if (reqLower.includes("diploma") || reqLower.includes("polytechnic")) {
+              return (
+                candidateDegree.includes("diploma") ||
+                candidateDegree.includes("polytechnic") ||
+                candidateDegree.includes("b.tech") ||
+                candidateDegree.includes("b.e.") ||
+                candidateDegree.includes("bachelor")
+              );
+            }
+            // Bachelor Tier
             if (reqLower.includes("bachelor") || reqLower.includes("b.tech") || reqLower.includes("b.e.") || reqLower.includes("graduation")) {
               return (
                 candidateDegree.includes("b.tech") ||
@@ -102,6 +140,7 @@ export class JobMatchingService {
                 candidateDegree.includes("graduation")
               );
             }
+            // Master Tier
             if (reqLower.includes("master") || reqLower.includes("m.tech") || reqLower.includes("m.e.") || reqLower.includes("post graduation")) {
               return (
                 candidateDegree.includes("m.tech") ||
@@ -165,23 +204,28 @@ export class JobMatchingService {
     }
     factors.push({ factor: "Experience", passed: expPassed, score: expScore, maxScore: 25, reason: expReason });
 
-    // 4. Skills Match Evaluation (Weight: 25) - Word Boundary Match Engine
+    // 4. Skills Match Evaluation (Weight: 25) — Normalized Punctuation & Distinct Token Match
     let skillScore = 25;
     const rawSkills = candidateProfile?.skills?.technicalSkills || candidateProfile?.skills || [];
-    const candidateSkillList = (Array.isArray(rawSkills) ? rawSkills : []).map((s: any) => (typeof s === "string" ? s : s.skillName || "").toLowerCase());
+    const candidateSkillList = (Array.isArray(rawSkills) ? rawSkills : []).map((s: any) =>
+      typeof s === "string" ? s : s.skillName || ""
+    );
     const jobSkills = job.skills || [];
 
     if (jobSkills.length > 0) {
       for (const js of jobSkills) {
-        const jsLower = js.toLowerCase();
+        const normJob = this.normalizeSkillToken(js);
         
-        // Exact or word boundary match to prevent "Java" matching "JavaScript" or "C" matching "C++"
         const isMatched = candidateSkillList.some((cs: string) => {
-          if (cs === jsLower) return true;
-          // Word boundary check for distinct skill tokens
-          const escapedJs = jsLower.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-          const regex = new RegExp(`\\b${escapedJs}\\b`, "i");
-          return regex.test(cs);
+          const normCandidate = this.normalizeSkillToken(cs);
+          
+          // Exact token match after normalization (e.g. cplusplus === cplusplus, c === c, csharp === csharp)
+          if (normCandidate === normJob) return true;
+
+          // Word boundary match for distinct non-punctuated tokens
+          const escapedNormJob = normJob.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          const regex = new RegExp(`\\b${escapedNormJob}\\b`, "i");
+          return regex.test(normCandidate);
         });
 
         if (isMatched) {
