@@ -24,6 +24,7 @@ import {
   PlusCircle,
   ChevronDown,
   Zap,
+  FileCheck,
 } from "lucide-react";
 
 interface CanonicalJob {
@@ -73,9 +74,9 @@ export default function JobsPage() {
   const [syncMsg, setSyncMsg] = useState("");
   const [selectedJob, setSelectedJob] = useState<CanonicalJob | null>(null);
 
-  // Auto-Apply State
+  // Auto-Apply State & Audit Receipt Modal
   const [applyingJobId, setApplyingJobId] = useState<string | null>(null);
-  const [appliedNotice, setAppliedNotice] = useState("");
+  const [autoApplyReceipt, setAutoApplyReceipt] = useState<any>(null);
 
   // Social Ingestion Modal State
   const [pasteModalOpen, setPasteModalOpen] = useState(false);
@@ -134,7 +135,7 @@ export default function JobsPage() {
 
   const handleAutoApply = async (job: CanonicalJob) => {
     setApplyingJobId(job._id);
-    setAppliedNotice("");
+    setAutoApplyReceipt(null);
     try {
       const res = await fetch("/api/v1/applications/auto-apply", {
         method: "POST",
@@ -150,8 +151,15 @@ export default function JobsPage() {
 
       const data = await res.json();
       if (res.ok && data.success) {
-        setAppliedNotice(`⚡ 1-Click AI Auto-Applied to ${job.title} at ${job.company}! Profile payload (DOB: 1999-07-09, M.Tech AI & ML, OBC) submitted and saved to your Application Tracker!`);
-        setTimeout(() => setAppliedNotice(""), 6000);
+        setAutoApplyReceipt({
+          jobTitle: job.title,
+          company: job.company,
+          location: job.location,
+          applicationUrl: job.applicationUrl || job.sourceUrl,
+          candidate: data.data.candidateProfileUsed,
+          timestamp: new Date().toLocaleString(),
+          applicationId: data.data.application._id,
+        });
       }
     } catch (err) {
       console.error("Auto-apply error:", err);
@@ -213,6 +221,14 @@ export default function JobsPage() {
 
         {/* Action Buttons */}
         <div className="flex items-center gap-3">
+          <Link
+            href="/dashboard/applications"
+            className="px-4 py-2 rounded-md glass-panel glass-panel-hover text-emerald-400 border border-emerald-500/30 text-xs font-bold flex items-center gap-2"
+          >
+            <FileCheck className="w-4 h-4 text-emerald-400" />
+            <span>Live ATS Tracker</span>
+          </Link>
+
           <button
             onClick={() => {
               setIngestedResult(null);
@@ -237,14 +253,6 @@ export default function JobsPage() {
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-6 space-y-8">
-        {/* Auto-Apply Success Banner */}
-        {appliedNotice && (
-          <div className="flex items-center gap-3 p-4 rounded-xl bg-gradient-to-r from-emerald-950 to-teal-900 border border-emerald-500/40 text-emerald-300 text-xs font-extrabold shadow-luxury animate-pulse">
-            <Zap className="w-5 h-5 flex-shrink-0 text-yellow-300" />
-            <span>{appliedNotice}</span>
-          </div>
-        )}
-
         {/* Sync Success Notification */}
         {syncMsg && (
           <div className="flex items-center gap-3 p-4 rounded-md bg-accent-success/10 border border-accent-success/30 text-accent-success text-sm font-semibold">
@@ -442,6 +450,70 @@ export default function JobsPage() {
           </div>
         )}
       </main>
+
+      {/* Auto-Apply Audit Receipt Proof Modal */}
+      {autoApplyReceipt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="glass-panel p-6 sm:p-8 rounded-xl border border-emerald-500/50 w-full max-w-md space-y-6 relative shadow-luxury">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2 text-base font-extrabold text-emerald-400">
+                <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+                <span>Application Submitted Successfully!</span>
+              </div>
+              <button onClick={() => setAutoApplyReceipt(null)} className="p-1.5 rounded-full hover:bg-white/10 text-text-muted cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 rounded-xl bg-background/90 border border-white/10 space-y-3 text-xs font-mono text-text-muted">
+              <div className="flex justify-between border-b border-white/10 pb-2">
+                <span className="text-primary font-bold">Applied Job:</span>
+                <span className="text-white font-bold">{autoApplyReceipt.jobTitle}</span>
+              </div>
+
+              <div className="flex justify-between border-b border-white/10 pb-2">
+                <span className="text-primary font-bold">Company / Org:</span>
+                <span className="text-white">{autoApplyReceipt.company}</span>
+              </div>
+
+              <div className="flex justify-between border-b border-white/10 pb-2">
+                <span className="text-primary font-bold">Candidate Profile Used:</span>
+                <span className="text-yellow-300 font-bold">{autoApplyReceipt.candidate.fullName}</span>
+              </div>
+
+              <div className="flex justify-between border-b border-white/10 pb-2">
+                <span className="text-primary font-bold">Date of Birth Filed:</span>
+                <span className="text-white">{autoApplyReceipt.candidate.dateOfBirth}</span>
+              </div>
+
+              <div className="flex justify-between border-b border-white/10 pb-2">
+                <span className="text-primary font-bold">Qualification Submitted:</span>
+                <span className="text-emerald-400">{autoApplyReceipt.candidate.education}</span>
+              </div>
+
+              <div className="flex justify-between border-b border-white/10 pb-2">
+                <span className="text-primary font-bold">Category Filed:</span>
+                <span className="text-white">{autoApplyReceipt.candidate.category}</span>
+              </div>
+
+              <div className="flex justify-between">
+                <span className="text-primary font-bold">Application Status:</span>
+                <span className="text-emerald-400 font-bold bg-emerald-500/20 px-2 py-0.5 rounded border border-emerald-500/30">APPLIED</span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Link
+                href="/dashboard/applications"
+                className="w-full py-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-luxury flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <FileCheck className="w-4 h-4" />
+                <span>View Application in ATS Tracker (/dashboard/applications)</span>
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Paste Social Job Post Modal */}
       {pasteModalOpen && (
