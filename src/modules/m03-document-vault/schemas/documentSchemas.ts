@@ -1,33 +1,7 @@
 import { z } from "zod";
 
-export const categoryEnum = z.enum([
-  "Photograph",
-  "Signature",
-  "Identity",
-  "Education",
-  "Experience",
-  "Resume",
-  "Other",
-]);
-
-export const documentTypeEnum = z.enum([
-  "Passport Photo",
-  "Signature Specimen",
-  "Aadhaar Card",
-  "PAN Card",
-  "Passport",
-  "Voter ID",
-  "Driving License",
-  "10th Marksheet",
-  "12th Certificate",
-  "Graduation Degree",
-  "Post Graduation Degree",
-  "Relieving Letter",
-  "Experience Certificate",
-  "Pay Slip",
-  "Resume / CV",
-  "Other Document",
-]);
+export const categoryEnum = z.string().min(1);
+export const documentTypeEnum = z.string().min(1);
 
 export const uploadMetadataSchema = z.object({
   category: categoryEnum,
