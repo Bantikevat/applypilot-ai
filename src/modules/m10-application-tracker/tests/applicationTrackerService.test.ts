@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { createApplicationSchema, updateApplicationSchema } from "../schemas/trackerSchemas";
 import { ApplicationTrackerService } from "../services/applicationTrackerService";
+import { ValidationError } from "@/lib/errors/AppError";
 
 describe("M10 — Application Tracker (Candidate ATS) Unit & Service Tests", () => {
   it("should validate create application schema correctly", () => {
@@ -30,6 +31,25 @@ describe("M10 — Application Tracker (Candidate ATS) Unit & Service Tests", () 
     expect(metrics.interviewCount).toBe(1);
     expect(metrics.offerCount).toBe(1);
     expect(metrics.offerConversionPercentage).toBe(33); // 1 offer / 3 active non-saved = 33%
+  });
+
+  it("should enforce state machine transition rules and prevent invalid transitions out of terminal states (REJECTED -> INTERVIEW_SCHEDULED)", async () => {
+    const userId = "test_ats_user_guards";
+
+    const app = await ApplicationTrackerService.createApplication(userId, {
+      jobTitle: "Systems Architect",
+      company: "DeepMind",
+      status: "APPLIED",
+      portalCategory: "Corporate",
+    });
+
+    // Valid transition: APPLIED -> REJECTED
+    await ApplicationTrackerService.updateApplication(userId, app._id as string, { status: "REJECTED" });
+
+    // Invalid transition: REJECTED -> INTERVIEW_SCHEDULED should throw ValidationError
+    await expect(
+      ApplicationTrackerService.updateApplication(userId, app._id as string, { status: "INTERVIEW_SCHEDULED" })
+    ).rejects.toThrowError(ValidationError);
   });
 
   it("should create, update, list, and delete candidate application in ATS store", async () => {

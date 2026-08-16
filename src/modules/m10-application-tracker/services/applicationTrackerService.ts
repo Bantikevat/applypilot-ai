@@ -1,7 +1,20 @@
 import { ApplicationTracker, IApplicationTrackerDocument } from "../models/ApplicationTracker";
 import { CreateApplicationInput, UpdateApplicationInput } from "../schemas/trackerSchemas";
 import { connectToDatabase } from "@/lib/db/mongoose";
-import { NotFoundError, AuthError } from "@/lib/errors/AppError";
+import { NotFoundError, AuthError, ValidationError } from "@/lib/errors/AppError";
+
+export type ApplicationStatus =
+  | "SAVED"
+  | "APPLIED"
+  | "UNDER_REVIEW"
+  | "SHORTLISTED"
+  | "INTERVIEW_SCHEDULED"
+  | "OFFER_RECEIVED"
+  | "OFFER_ACCEPTED"
+  | "OFFER_DECLINED"
+  | "REJECTED"
+  | "WITHDRAWN"
+  | "GHOSTED";
 
 export interface MemoryApplication {
   _id: string;
@@ -10,7 +23,7 @@ export interface MemoryApplication {
   jobTitle: string;
   company: string;
   applicationUrl?: string;
-  status: "SAVED" | "APPLIED" | "UNDER_REVIEW" | "SHORTLISTED" | "INTERVIEW_SCHEDULED" | "OFFER_RECEIVED" | "REJECTED" | "WITHDRAWN";
+  status: ApplicationStatus;
   portalCategory: "Government" | "Corporate" | "Remote" | "Other";
   appliedAt: Date;
   deadlineAt?: Date;
@@ -22,6 +35,24 @@ export interface MemoryApplication {
 
 const memoryApplications = new Map<string, MemoryApplication>();
 
+/**
+ * State Transition Guard Map for Application Pipeline Lifecycle
+ * Enforces valid state transitions and protects terminal states (REJECTED, WITHDRAWN, OFFER_ACCEPTED, OFFER_DECLINED).
+ */
+const VALID_TRANSITIONS: Record<string, string[]> = {
+  SAVED: ["APPLIED", "WITHDRAWN"],
+  APPLIED: ["UNDER_REVIEW", "SHORTLISTED", "INTERVIEW_SCHEDULED", "OFFER_RECEIVED", "REJECTED", "WITHDRAWN", "GHOSTED"],
+  UNDER_REVIEW: ["SHORTLISTED", "INTERVIEW_SCHEDULED", "OFFER_RECEIVED", "REJECTED", "WITHDRAWN", "GHOSTED"],
+  SHORTLISTED: ["INTERVIEW_SCHEDULED", "OFFER_RECEIVED", "REJECTED", "WITHDRAWN", "GHOSTED"],
+  INTERVIEW_SCHEDULED: ["OFFER_RECEIVED", "REJECTED", "WITHDRAWN", "GHOSTED"],
+  OFFER_RECEIVED: ["OFFER_ACCEPTED", "OFFER_DECLINED", "WITHDRAWN"],
+  OFFER_ACCEPTED: [], // Terminal state
+  OFFER_DECLINED: [], // Terminal state
+  REJECTED: [],       // Terminal state — No transitions permitted out of REJECTED
+  WITHDRAWN: [],      // Terminal state
+  GHOSTED: ["UNDER_REVIEW", "INTERVIEW_SCHEDULED", "REJECTED", "WITHDRAWN"], // Revivable state
+};
+
 export interface ATSMetricsSummary {
   totalCount: number;
   savedCount: number;
@@ -29,11 +60,32 @@ export interface ATSMetricsSummary {
   underReviewCount: number;
   interviewCount: number;
   offerCount: number;
+  acceptedCount: number;
   rejectedCount: number;
+  withdrawnCount: number;
+  ghostedCount: number;
   offerConversionPercentage: number;
 }
 
 export class ApplicationTrackerService {
+  /**
+   * Validates state transitions between current and new application status
+   */
+  static validateStatusTransition(currentStatus: string, newStatus: string): void {
+    if (currentStatus === newStatus) return;
+
+    const allowedNext = VALID_TRANSITIONS[currentStatus];
+    if (!allowedNext || !allowedNext.includes(newStatus)) {
+      throw new ValidationError(
+        `Invalid status transition from '${currentStatus}' to '${newStatus}'. ${
+          allowedNext && allowedNext.length === 0
+            ? `'${currentStatus}' is a terminal state and cannot be modified.`
+            : `Allowed transitions from '${currentStatus}' are: ${allowedNext?.join(", ") || "None"}.`
+        }`
+      );
+    }
+  }
+
   /**
    * Computes ATS metrics summary for a candidate
    */
@@ -43,7 +95,10 @@ export class ApplicationTrackerService {
     let underReview = 0;
     let interview = 0;
     let offer = 0;
+    let accepted = 0;
     let rejected = 0;
+    let withdrawn = 0;
+    let ghosted = 0;
 
     for (const a of apps) {
       switch (a.status) {
@@ -52,7 +107,11 @@ export class ApplicationTrackerService {
         case "UNDER_REVIEW": case "SHORTLISTED": underReview++; break;
         case "INTERVIEW_SCHEDULED": interview++; break;
         case "OFFER_RECEIVED": offer++; break;
-        case "REJECTED": case "WITHDRAWN": rejected++; break;
+        case "OFFER_ACCEPTED": accepted++; offer++; break;
+        case "OFFER_DECLINED": offer++; break;
+        case "REJECTED": rejected++; break;
+        case "WITHDRAWN": withdrawn++; break;
+        case "GHOSTED": ghosted++; break;
       }
     }
 
@@ -66,7 +125,10 @@ export class ApplicationTrackerService {
       underReviewCount: underReview,
       interviewCount: interview,
       offerCount: offer,
+      acceptedCount: accepted,
       rejectedCount: rejected,
+      withdrawnCount: withdrawn,
+      ghostedCount: ghosted,
       offerConversionPercentage: conversion,
     };
   }
@@ -109,7 +171,7 @@ export class ApplicationTrackerService {
       jobTitle: input.jobTitle,
       company: input.company,
       applicationUrl: input.applicationUrl || "",
-      status: input.status,
+      status: input.status as ApplicationStatus,
       portalCategory: input.portalCategory,
       appliedAt,
       deadlineAt,
@@ -165,7 +227,7 @@ export class ApplicationTrackerService {
   }
 
   /**
-   * Updates an application status, deadline, or notes
+   * Updates an application status, deadline, or notes with state transition guards
    */
   static async updateApplication(userId: string, applicationId: string, updates: UpdateApplicationInput): Promise<Partial<IApplicationTrackerDocument | MemoryApplication>> {
     const db = await connectToDatabase();
@@ -178,7 +240,10 @@ export class ApplicationTrackerService {
             throw new AuthError("Unauthorized access to requested application");
           }
 
-          if (updates.status) app.status = updates.status;
+          if (updates.status) {
+            this.validateStatusTransition(app.status, updates.status);
+            app.status = updates.status;
+          }
           if (updates.notes !== undefined) app.notes = updates.notes;
           if (updates.deadlineAt) app.deadlineAt = new Date(updates.deadlineAt);
           if (updates.nextFollowUpAt) app.nextFollowUpAt = new Date(updates.nextFollowUpAt);
@@ -187,7 +252,7 @@ export class ApplicationTrackerService {
           return app;
         }
       } catch (err) {
-        if (err instanceof AuthError) throw err;
+        if (err instanceof AuthError || err instanceof ValidationError) throw err;
       }
     }
 
@@ -200,7 +265,10 @@ export class ApplicationTrackerService {
       throw new AuthError("Unauthorized access to requested application");
     }
 
-    if (updates.status) memApp.status = updates.status;
+    if (updates.status) {
+      this.validateStatusTransition(memApp.status, updates.status);
+      memApp.status = updates.status as ApplicationStatus;
+    }
     if (updates.notes !== undefined) memApp.notes = updates.notes;
     if (updates.deadlineAt) memApp.deadlineAt = new Date(updates.deadlineAt);
     if (updates.nextFollowUpAt) memApp.nextFollowUpAt = new Date(updates.nextFollowUpAt);

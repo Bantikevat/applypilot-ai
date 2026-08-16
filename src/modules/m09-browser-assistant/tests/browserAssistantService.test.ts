@@ -22,7 +22,7 @@ describe("M09 — Browser Application Assistant Unit & Service Tests", () => {
     expect(res.success).toBe(true);
   });
 
-  it("should initiate assistant session and pause at AWAITING_HUMAN_REVIEW HITL Gate", async () => {
+  it("should initiate assistant session and pause at AWAITING_HUMAN_REVIEW HITL Gate with server-locked injectionScript", async () => {
     const userId = "test_asst_user_1";
     const session = await BrowserAssistantService.startSession(
       userId,
@@ -35,10 +35,10 @@ describe("M09 — Browser Application Assistant Unit & Service Tests", () => {
     expect(session.currentStep).toBe("AWAITING_HUMAN_REVIEW");
     expect(session.hitlProtectionActive).toBe(true);
     expect(session.candidateApproved).toBe(false);
-    expect(session.injectionScript).toContain("ApplyPilot AI");
+    expect(session.injectionScript).toBeNull(); // Server-side HITL Lock: Payload is NULL until candidate approval
   });
 
-  it("should confirm HITL step, apply manual candidate edits, and transition state to APPROVED_FOR_SUBMIT", async () => {
+  it("should confirm HITL step, apply manual candidate edits, and transition state to APPROVED_FOR_SUBMIT releasing injection script", async () => {
     const userId = "test_asst_user_2";
     const session = await BrowserAssistantService.startSession(
       userId,
@@ -55,6 +55,7 @@ describe("M09 — Browser Application Assistant Unit & Service Tests", () => {
 
     expect(updatedSession.candidateApproved).toBe(true);
     expect(updatedSession.currentStep).toBe("APPROVED_FOR_SUBMIT");
+    expect(updatedSession.injectionScript).not.toBeNull();
     expect(updatedSession.injectionScript).toContain("Banti Kevat (Verified)");
   });
 

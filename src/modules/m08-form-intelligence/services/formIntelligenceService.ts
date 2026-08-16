@@ -67,22 +67,45 @@ export const PORTAL_STANDARD_SCHEMAS: Record<string, FormFieldInput[]> = {
 
 export class FormIntelligenceService {
   /**
+   * Helper to normalize DOM field identifiers (strips punctuation, dashes, underscores, brackets)
+   */
+  private static normalizeFieldIdentifier(id: string): string {
+    return (id || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  }
+
+  /**
    * Matches arbitrary DOM field input string against canonical dictionary rules
+   * Uses both exact alias matching and normalized fuzzy token matching (e.g. "candidate.firstName" vs "first_name")
    */
   static matchCanonicalField(fieldIdentifier: string, label?: string): FieldMappingRule | null {
     const cleanId = fieldIdentifier.toLowerCase().trim();
     const cleanLabel = (label || "").toLowerCase().trim();
+    const normId = this.normalizeFieldIdentifier(fieldIdentifier);
+    const normLabel = this.normalizeFieldIdentifier(label || "");
 
-    // 1. Exact alias match
+    // 1. Exact or Normalized alias match
     for (const rule of CANONICAL_FIELD_DICTIONARY) {
-      if (rule.aliases.some((alias) => alias.toLowerCase() === cleanId || alias.toLowerCase() === cleanLabel)) {
-        return rule;
+      for (const alias of rule.aliases) {
+        const normAlias = this.normalizeFieldIdentifier(alias);
+        if (
+          alias.toLowerCase() === cleanId ||
+          alias.toLowerCase() === cleanLabel ||
+          normAlias === normId ||
+          (normLabel && normAlias === normLabel)
+        ) {
+          return rule;
+        }
       }
     }
 
     // 2. Regex pattern match
     for (const rule of CANONICAL_FIELD_DICTIONARY) {
-      if (rule.regexPattern.test(cleanId) || (cleanLabel && rule.regexPattern.test(cleanLabel))) {
+      if (
+        rule.regexPattern.test(cleanId) ||
+        (cleanLabel && rule.regexPattern.test(cleanLabel)) ||
+        rule.regexPattern.test(normId) ||
+        (normLabel && rule.regexPattern.test(normLabel))
+      ) {
         return rule;
       }
     }

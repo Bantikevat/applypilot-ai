@@ -13,12 +13,13 @@ export interface AssistantSession {
   hitlProtectionActive: boolean;
   preFillPlan: any;
   candidateApproved: boolean;
-  injectionScript: string;
+  injectionScript: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
 const activeAssistantSessions = new Map<string, AssistantSession>();
+const portalSessionCooldowns = new Map<string, number>();
 
 const DEFAULT_PORTAL_FORM_FIELDS: FormFieldInput[] = [
   { fieldIdentifier: "full_name", label: "Full Name", isRequired: true },
@@ -33,6 +34,7 @@ const DEFAULT_PORTAL_FORM_FIELDS: FormFieldInput[] = [
 export class BrowserAssistantService {
   /**
    * Initiates a new client-assisted browser application session
+   * Enforces server-side HITL protection (injectionScript = null) and per-portal per-user rate limiting (60s cooldown)
    */
   static async startSession(
     userId: string,
@@ -41,7 +43,21 @@ export class BrowserAssistantService {
     jobId?: string,
     customFormFields?: FormFieldInput[]
   ): Promise<AssistantSession> {
-    const sessionId = `asst_sess_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    // 1. Rate Limiter Guard: Enforce 60s cooldown per user per portal to prevent spam / portal bans
+    const rateLimitKey = `${userId}:${portalName.toLowerCase().trim()}`;
+    const lastSessionTime = portalSessionCooldowns.get(rateLimitKey) || 0;
+    const cooldownMs = 60 * 1000;
+    const now = Date.now();
+
+    if (now - lastSessionTime < cooldownMs && process.env.NODE_ENV !== "test") {
+      const waitSec = Math.ceil((cooldownMs - (now - lastSessionTime)) / 1000);
+      throw new ValidationError(
+        `Rate limit safety cool-down active for ${portalName}. Please wait ${waitSec} seconds before starting another application session.`
+      );
+    }
+    portalSessionCooldowns.set(rateLimitKey, now);
+
+    const sessionId = `asst_sess_${now}_${Math.random().toString(36).substring(2, 7)}`;
     const fieldsToUse = Array.isArray(customFormFields) && customFormFields.length > 0
       ? customFormFields
       : DEFAULT_PORTAL_FORM_FIELDS;
@@ -53,6 +69,7 @@ export class BrowserAssistantService {
       fieldsToUse
     );
 
+    // SERVER-SIDE HITL PROTECTION: injectionScript is explicitly set to NULL until human confirmation
     const session: AssistantSession = {
       sessionId,
       userId,
@@ -63,7 +80,7 @@ export class BrowserAssistantService {
       hitlProtectionActive: true,
       preFillPlan,
       candidateApproved: false,
-      injectionScript: this.generateDOMInjectionScript(preFillPlan.plan),
+      injectionScript: null, // Server locks payload until explicit candidate approval
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -73,7 +90,7 @@ export class BrowserAssistantService {
   }
 
   /**
-   * Candidate HITL Confirmation Gate: Updates field overrides & approves form injection
+   * Candidate HITL Confirmation Gate: Updates field overrides, validates server lock, & compiles DOM injection script
    */
   static async confirmHumanStep(
     sessionId: string,
@@ -105,7 +122,8 @@ export class BrowserAssistantService {
 
     session.candidateApproved = candidateApproved;
     session.currentStep = candidateApproved ? "APPROVED_FOR_SUBMIT" : "AWAITING_HUMAN_REVIEW";
-    session.injectionScript = this.generateDOMInjectionScript(session.preFillPlan.plan);
+    // SERVER RELEASES INJECTION PAYLOAD ONLY AFTER EXPLICIT CANDIDATE APPROVAL
+    session.injectionScript = candidateApproved ? this.generateDOMInjectionScript(session.preFillPlan.plan) : null;
     session.updatedAt = new Date();
 
     return session;
