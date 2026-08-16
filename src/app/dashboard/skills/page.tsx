@@ -42,7 +42,9 @@ interface AnalysisResult {
 
 const ROLES = [
   { id: "fullstack-ai", title: "Fullstack AI Engineer", category: "Engineering" },
+  { id: "backend-cloud-architect", title: "Backend & Cloud Architect", category: "Engineering" },
   { id: "frontend-lead", title: "Frontend Lead / UI Architect", category: "Engineering" },
+  { id: "ml-ai-engineer", title: "Machine Learning & AI Specialist", category: "Data & AI" },
   { id: "govt-aso", title: "Assistant Section Officer (SSC ASO)", category: "Government" },
 ];
 

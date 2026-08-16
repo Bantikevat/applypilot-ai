@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { analyzeSkillGapSchema, addSkillToProfileSchema } from "../schemas/skillGapSchemas";
 import { SkillGapService } from "../services/skillGapService";
+import { NotFoundError } from "@/lib/errors/AppError";
 
 describe("M07 — Skill Gap & Learning Agent Unit & Service Tests", () => {
   it("should validate analyze skill gap schema correctly", () => {
@@ -15,7 +16,7 @@ describe("M07 — Skill Gap & Learning Agent Unit & Service Tests", () => {
     expect(res.success).toBe(true);
   });
 
-  it("should analyze skill gaps and return mastered skills vs critical gaps", () => {
+  it("should analyze skill gaps and return mastered skills vs critical gaps for target role benchmark", () => {
     const candidateProfile = {
       skills: [
         { skillName: "React", proficiency: "ADVANCED" },
@@ -30,6 +31,24 @@ describe("M07 — Skill Gap & Learning Agent Unit & Service Tests", () => {
     expect(result.masteredCount).toBe(2);
     expect(result.criticalGaps.length).toBeGreaterThan(0);
     expect(result.estimatedTotalDays).toBeGreaterThan(0);
+  });
+
+  it("should analyze skill gaps for newly added backend-cloud-architect benchmark", () => {
+    const candidateProfile = {
+      skills: [
+        { skillName: "MongoDB & PostgreSQL", proficiency: "ADVANCED" },
+      ],
+    };
+
+    const result = SkillGapService.analyzeSkillGap(candidateProfile, "backend-cloud-architect");
+
+    expect(result).toBeDefined();
+    expect(result.roleTitle).toContain("Backend");
+    expect(result.masteredCount).toBe(1);
+  });
+
+  it("should throw NotFoundError when invalid roleId is passed to analyzeSkillGap", () => {
+    expect(() => SkillGapService.analyzeSkillGap({}, "non-existent-role")).toThrowError(NotFoundError);
   });
 
   it("should append acquired skill to candidate profile without duplicates", async () => {
