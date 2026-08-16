@@ -5,21 +5,21 @@ import { AppError } from "@/lib/errors/AppError";
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const userId = searchParams.get("userId") || "guest_user";
+    const roleId = searchParams.get("roleId") || undefined;
 
-    const overview = await CareerAnalyticsService.getAnalyticsOverview(userId);
+    const benchmarks = CareerAnalyticsService.getSalaryBenchmarks(roleId);
 
     return NextResponse.json({
       success: true,
       data: {
-        overview,
+        benchmarks,
       },
     });
   } catch (err: any) {
-    console.error("Career Analytics Overview API Error:", err);
+    console.error("Salary Benchmarks API Error:", err);
     const statusCode = err instanceof AppError ? err.statusCode : 500;
     return NextResponse.json(
-      { success: false, error: err.message || "Failed to retrieve analytics overview." },
+      { success: false, error: err.message || "Failed to retrieve salary benchmarks." },
       { status: statusCode }
     );
   }

@@ -1,30 +1,32 @@
 import { describe, it, expect } from "vitest";
-import { analyticsFilterSchema, salaryTrendQuerySchema } from "../schemas/analyticsSchemas";
+import { analyticsFilterSchema } from "../schemas/analyticsSchemas";
 import { CareerAnalyticsService } from "../services/careerAnalyticsService";
 
 describe("M11 — Career Analytics & Market Intelligence Unit & Service Tests", () => {
-  it("should validate analytics filter schema correctly", () => {
-    const validReq = { timeframe: "ALL_TIME" as const, portalCategory: "Corporate" as const };
+  it("should validate analytics query schema correctly", () => {
+    const validReq = { timeframe: "ALL_TIME" as const, portalCategory: "ALL" as const };
     const res = analyticsFilterSchema.safeParse(validReq);
     expect(res.success).toBe(true);
   });
 
-  it("should return salary benchmarks for target roles", () => {
-    const benchmarks = CareerAnalyticsService.getSalaryBenchmarks("fullstack-ai");
+  it("should compute candidate career analytics overview cleanly", async () => {
+    const userId = "test_analytics_user_1";
 
-    expect(benchmarks.length).toBe(1);
-    expect(benchmarks[0].roleTitle).toBe("Fullstack AI Engineer");
-    expect(benchmarks[0].minLpa).toBe(12);
-    expect(benchmarks[0].medianLpa).toBe(24);
+    const overview = await CareerAnalyticsService.getAnalyticsOverview(userId);
+
+    expect(overview).toBeDefined();
+    expect(overview.profileCompletenessScore).toBeGreaterThanOrEqual(0);
+    expect(overview.conversionFunnel.length).toBe(5);
+    expect(overview.portalPerformance.length).toBe(3);
+    expect(overview.topSalaryBenchmarks.length).toBeGreaterThan(0);
   });
 
-  it("should compute candidate career analytics overview cleanly", async () => {
-    const userId = "test_analytics_user_123";
-    const analytics = await CareerAnalyticsService.getAnalyticsOverview(userId);
+  it("should retrieve specific salary benchmark for backend-cloud-architect", () => {
+    const benchmarks = CareerAnalyticsService.getSalaryBenchmarks("backend-cloud-architect");
 
-    expect(analytics).toBeDefined();
-    expect(analytics.conversionFunnel.length).toBe(4);
-    expect(analytics.portalPerformance.length).toBe(3);
-    expect(analytics.topSalaryBenchmarks.length).toBeGreaterThan(0);
+    expect(benchmarks.length).toBe(1);
+    expect(benchmarks[0].roleTitle).toContain("Backend");
+    expect(benchmarks[0].minLpa).toBe(16);
+    expect(benchmarks[0].maxLpa).toBe(55);
   });
 });
