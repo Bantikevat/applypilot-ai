@@ -23,6 +23,8 @@ import {
   ClipboardPaste,
   PlusCircle,
   ChevronDown,
+  Code,
+  Check,
 } from "lucide-react";
 
 interface CanonicalJob {
@@ -45,6 +47,7 @@ interface CanonicalJob {
   trustScore: number;
   trustBadge: "Verified Official Source" | "High Confidence" | "Needs Verification" | "Suspicious / Application Fee Warning";
   postedAt: string;
+  rawPayload?: any;
 }
 
 const CATEGORIES = ["All", "Government", "Tech MNCs", "Remote", "WhatsApp / Telegram"];
@@ -77,7 +80,7 @@ export default function JobsPage() {
   const [groupName, setGroupName] = useState("Jobs In India (ISRO | DRDO)");
   const [rawText, setRawText] = useState("");
   const [ingesting, setIngesting] = useState(false);
-  const [ingestSuccess, setIngestSuccess] = useState("");
+  const [ingestedResult, setIngestedResult] = useState<any>(null);
 
   useEffect(() => {
     fetchJobs();
@@ -131,7 +134,7 @@ export default function JobsPage() {
     if (!rawText.trim()) return;
 
     setIngesting(true);
-    setIngestSuccess("");
+    setIngestedResult(null);
     try {
       const endpoint = socialSource === "TELEGRAM" ? "/api/v1/jobs/telegram-webhook" : "/api/v1/jobs/whatsapp-webhook";
       const res = await fetch(endpoint, {
@@ -140,19 +143,14 @@ export default function JobsPage() {
         body: JSON.stringify({
           messageText: rawText,
           groupName: groupName || (socialSource === "TELEGRAM" ? "Telegram Job Channel" : "WhatsApp Job Group"),
-          senderName: "Banti Direct Paste",
+          senderName: "Banti Personal Account",
         }),
       });
 
       const data = await res.json();
       if (res.ok && data.success) {
-        setIngestSuccess(`SUCCESS! Job extracted from '${groupName}' post and saved to Live Database!`);
-        setRawText("");
+        setIngestedResult(data.data?.job || data.data);
         fetchJobs();
-        setTimeout(() => {
-          setIngestSuccess("");
-          setPasteModalOpen(false);
-        }, 2000);
       }
     } catch (err) {
       console.error("Social job paste ingestion failed:", err);
@@ -185,7 +183,10 @@ export default function JobsPage() {
         {/* Action Buttons */}
         <div className="flex items-center gap-3">
           <button
-            onClick={() => setPasteModalOpen(true)}
+            onClick={() => {
+              setIngestedResult(null);
+              setPasteModalOpen(true);
+            }}
             className="px-4 py-2 rounded-md bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-bold shadow-luxury flex items-center gap-2 cursor-pointer transition-all"
           >
             <ClipboardPaste className="w-4 h-4 text-yellow-300 animate-bounce" />
@@ -218,7 +219,7 @@ export default function JobsPage() {
           <div className="space-y-2 text-center md:text-left">
             <div className="flex items-center justify-center md:justify-start gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wider">
               <Radio className="w-4 h-4 animate-pulse" />
-              <span>Telegram Channels & WhatsApp Groups Real-Time Ingestion Active</span>
+              <span>Telegram & WhatsApp Real-Time Ingestion Engine Active</span>
             </div>
             <h2 className="text-lg sm:text-xl font-extrabold text-white">
               Telegram & WhatsApp Job Ingester: <span className="text-emerald-400">ISRO, DRDO, TechUprise & MERN Channels</span>
@@ -230,24 +231,30 @@ export default function JobsPage() {
 
           <div className="flex items-center gap-3 border-t md:border-t-0 md:border-l border-white/10 pt-4 md:pt-0 md:pl-6 flex-shrink-0">
             <button
-              onClick={() => setPasteModalOpen(true)}
+              onClick={() => {
+                setIngestedResult(null);
+                setPasteModalOpen(true);
+              }}
               className="p-3 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 flex items-center gap-2.5 transition-all cursor-pointer"
             >
               <Send className="w-5 h-5 text-cyan-400" />
               <div className="text-left">
                 <span className="text-xs font-bold block">Telegram Posts</span>
-                <span className="text-[10px] font-mono text-cyan-300 block">+ Paste & Parse Job</span>
+                <span className="text-[10px] font-mono text-cyan-300 block">+ Paste & Verify Job</span>
               </div>
             </button>
 
             <button
-              onClick={() => setPasteModalOpen(true)}
+              onClick={() => {
+                setIngestedResult(null);
+                setPasteModalOpen(true);
+              }}
               className="p-3 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 flex items-center gap-2.5 transition-all cursor-pointer"
             >
               <MessageSquare className="w-5 h-5 text-emerald-400" />
               <div className="text-left">
                 <span className="text-xs font-bold block">WhatsApp Groups</span>
-                <span className="text-[10px] font-mono text-emerald-300 block">+ Paste & Parse Job</span>
+                <span className="text-[10px] font-mono text-emerald-300 block">+ Paste & Verify Job</span>
               </div>
             </button>
           </div>
@@ -386,24 +393,66 @@ export default function JobsPage() {
         )}
       </main>
 
-      {/* Paste Social Job Post Modal with Banti Presets */}
+      {/* Paste Social Job Post Modal with Real Proof Payload */}
       {pasteModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-          <div className="glass-panel p-6 sm:p-8 rounded-xl border border-primary/40 w-full max-w-lg space-y-6 relative shadow-luxury">
+          <div className="glass-panel p-6 sm:p-8 rounded-xl border border-primary/40 w-full max-w-xl space-y-6 relative shadow-luxury">
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <div className="flex items-center gap-2 text-base font-bold text-text-main">
                 <ClipboardPaste className="w-5 h-5 text-primary" />
-                <span>Parse Job Post from Telegram or WhatsApp</span>
+                <span>Parse & Verify Job Post from Telegram / WhatsApp</span>
               </div>
               <button onClick={() => setPasteModalOpen(false)} className="p-1.5 rounded-full hover:bg-white/10 text-text-muted cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {ingestSuccess && (
-              <div className="p-4 rounded-md bg-accent-success/10 border border-accent-success/30 text-accent-success text-xs font-bold flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-                <span>{ingestSuccess}</span>
+            {/* Ingestion Verification Proof Box */}
+            {ingestedResult && (
+              <div className="p-4 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 space-y-3 shadow-luxury">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span>✓ 100% Ingested & Saved in Live Atlas Cloud Database</span>
+                  </span>
+                  <span className="text-[10px] font-mono bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/30">
+                    STATUS: ACTIVE
+                  </span>
+                </div>
+
+                <div className="p-3 rounded-lg bg-background/80 border border-white/10 space-y-2 text-xs font-mono text-text-muted overflow-x-auto">
+                  <div className="flex justify-between border-b border-white/10 pb-1">
+                    <span className="text-primary font-bold">Extracted Job Title:</span>
+                    <span className="text-white font-bold">{ingestedResult.title}</span>
+                  </div>
+
+                  <div className="flex justify-between border-b border-white/10 pb-1">
+                    <span className="text-primary font-bold">Company / Channel:</span>
+                    <span className="text-white">{ingestedResult.company}</span>
+                  </div>
+
+                  <div className="flex justify-between border-b border-white/10 pb-1">
+                    <span className="text-primary font-bold">Extracted Location:</span>
+                    <span className="text-white">{ingestedResult.location}</span>
+                  </div>
+
+                  <div className="flex justify-between border-b border-white/10 pb-1">
+                    <span className="text-primary font-bold">Apply Link Extracted:</span>
+                    <span className="text-emerald-400 underline truncate max-w-xs">{ingestedResult.applicationUrl || ingestedResult.sourceUrl}</span>
+                  </div>
+
+                  <div className="flex justify-between">
+                    <span className="text-primary font-bold">Trust Badge:</span>
+                    <span className="text-yellow-300 font-bold">{ingestedResult.trustBadge} ({ingestedResult.trustScore}% Trust Score)</span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setPasteModalOpen(false)}
+                  className="w-full py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-luxury cursor-pointer"
+                >
+                  View Job Card on Dashboard Feed →
+                </button>
               </div>
             )}
 
@@ -487,7 +536,7 @@ export default function JobsPage() {
                 className="btn-glow w-full py-3 rounded-lg font-bold text-xs text-white shadow-luxury disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
               >
                 <PlusCircle className={`w-4 h-4 ${ingesting ? "animate-spin" : ""}`} />
-                <span>{ingesting ? "AI Extracting Job Details..." : "AI RegEx Parse & Save to Dashboard"}</span>
+                <span>{ingesting ? "AI RegEx Extracting & Saving..." : "AI RegEx Parse & Save to Dashboard"}</span>
               </button>
             </form>
           </div>
