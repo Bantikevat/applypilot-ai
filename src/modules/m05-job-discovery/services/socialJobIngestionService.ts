@@ -11,6 +11,27 @@ export interface RawSocialJobMessage {
 
 export class SocialJobIngestionService {
   /**
+   * Clean and sanitize URLs extracted from social messages
+   */
+  private static sanitizeUrl(rawUrl: string, company: string, title: string): string {
+    if (!rawUrl) {
+      return `https://www.google.com/search?q=${encodeURIComponent(`${company} ${title} Careers Apply`)}`;
+    }
+
+    let cleaned = rawUrl.replace(/[.,()\]"']+$/, "").trim();
+
+    if (cleaned.includes("@") && !cleaned.startsWith("http")) {
+      return `mailto:${cleaned}`;
+    }
+
+    if (!cleaned.startsWith("http://") && !cleaned.startsWith("https://")) {
+      cleaned = `https://${cleaned}`;
+    }
+
+    return cleaned;
+  }
+
+  /**
    * Parses raw WhatsApp or Telegram job posts using RegEx NLP parser
    * Extracts Job Title, Company, Apply Link, Location, and Salary
    */
@@ -49,7 +70,8 @@ export class SocialJobIngestionService {
       extractedCompany = matchVal.split(".")[0].trim();
     }
 
-    const extractedLink = linkMatch ? linkMatch[0] : "https://applypilot.ai/jobs";
+    const rawLink = linkMatch ? linkMatch[0] : "";
+    const extractedLink = this.sanitizeUrl(rawLink, extractedCompany, extractedTitle);
 
     let extractedLocation = "Remote / Hybrid";
     if (locationMatch) {
