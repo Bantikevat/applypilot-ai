@@ -43,6 +43,10 @@ export default function MatchesPage() {
   const [loading, setLoading] = useState(true);
   const [selectedMatch, setSelectedMatch] = useState<JobMatch | null>(null);
 
+  // Auto-apply state
+  const [applying, setApplying] = useState(false);
+  const [applySuccess, setApplySuccess] = useState("");
+
   useEffect(() => {
     fetchMatches();
   }, []);
@@ -64,6 +68,33 @@ export default function MatchesPage() {
       setLoading(false);
     }
   }
+
+  const handleAutoApply = async (match: JobMatch) => {
+    setApplying(true);
+    setApplySuccess("");
+    try {
+      const res = await fetch("/api/v1/applications/auto-apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jobId: match.jobId,
+          jobTitle: match.jobTitle,
+          company: match.company,
+          location: match.location,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setApplySuccess(`⚡ Auto-Applied to ${match.jobTitle} at ${match.company}! Candidate profile (DOB: 09-07-1999, M.Tech AI & ML, OBC) submitted and saved to your Application Tracker!`);
+        setTimeout(() => setApplySuccess(""), 6000);
+      }
+    } catch (err) {
+      console.error("Auto apply error:", err);
+    } finally {
+      setApplying(false);
+    }
+  };
 
   const getVerdictBadge = (verdict: JobMatch["eligibilityVerdict"]) => {
     switch (verdict) {
@@ -92,7 +123,7 @@ export default function MatchesPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-text-main flex flex-col">
+    <div className="min-h-screen bg-background text-text-main flex flex-col font-sans">
       {/* Header */}
       <header className="border-b border-white/10 glass-panel sticky top-0 z-50 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -101,7 +132,7 @@ export default function MatchesPage() {
           </Link>
           <div className="flex items-center gap-2 text-xl font-bold tracking-tight">
             <Sparkles className="w-5 h-5 text-primary" />
-            <span>AI Job Matching & Eligibility</span>
+            <span>AI Job Matching & Autonomous Auto-Apply</span>
           </div>
         </div>
 
@@ -113,6 +144,14 @@ export default function MatchesPage() {
 
       {/* Main Container */}
       <main className="flex-1 max-w-6xl w-full mx-auto p-6 space-y-8">
+        {/* Apply Success Notification */}
+        {applySuccess && (
+          <div className="flex items-center gap-3 p-4 rounded-xl bg-gradient-to-r from-emerald-950 to-teal-900 border border-emerald-500/40 text-emerald-300 text-xs font-extrabold shadow-luxury animate-pulse">
+            <Zap className="w-5 h-5 flex-shrink-0 text-yellow-300" />
+            <span>{applySuccess}</span>
+          </div>
+        )}
+
         {loading ? (
           <div className="p-12 text-center text-text-muted text-sm glass-panel rounded-lg border border-white/10">
             <Sparkles className="w-6 h-6 text-primary mx-auto mb-2 animate-spin" />
@@ -255,15 +294,16 @@ export default function MatchesPage() {
                     </div>
                   </div>
 
-                  {/* Actions */}
+                  {/* 1-Click AI Auto-Apply Action Button */}
                   <div className="pt-2">
-                    <Link
-                      href="/dashboard/jobs"
-                      className="btn-glow w-full py-3.5 px-6 rounded-md text-white font-semibold text-xs shadow-luxury flex items-center justify-center gap-2"
+                    <button
+                      onClick={() => handleAutoApply(selectedMatch)}
+                      disabled={applying}
+                      className="btn-glow w-full py-4 px-6 rounded-lg text-white font-extrabold text-xs shadow-luxury flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 transition-all"
                     >
-                      <Briefcase className="w-4 h-4" />
-                      <span>Proceed to Job Application Portal</span>
-                    </Link>
+                      <Zap className={`w-4 h-4 text-yellow-300 ${applying ? "animate-spin" : ""}`} />
+                      <span>{applying ? "AI Auto-Filing Application..." : "⚡ 1-Click AI Auto-Apply for Banti Kevat"}</span>
+                    </button>
                   </div>
                 </div>
               )}

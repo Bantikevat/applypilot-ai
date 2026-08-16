@@ -23,8 +23,7 @@ import {
   ClipboardPaste,
   PlusCircle,
   ChevronDown,
-  Code,
-  Check,
+  Zap,
 } from "lucide-react";
 
 interface CanonicalJob {
@@ -73,6 +72,10 @@ export default function JobsPage() {
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState("");
   const [selectedJob, setSelectedJob] = useState<CanonicalJob | null>(null);
+
+  // Auto-Apply State
+  const [applyingJobId, setApplyingJobId] = useState<string | null>(null);
+  const [appliedNotice, setAppliedNotice] = useState("");
 
   // Social Ingestion Modal State
   const [pasteModalOpen, setPasteModalOpen] = useState(false);
@@ -129,6 +132,34 @@ export default function JobsPage() {
     }
   };
 
+  const handleAutoApply = async (job: CanonicalJob) => {
+    setApplyingJobId(job._id);
+    setAppliedNotice("");
+    try {
+      const res = await fetch("/api/v1/applications/auto-apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jobId: job._id,
+          jobTitle: job.title,
+          company: job.company,
+          location: job.location,
+          applicationUrl: job.applicationUrl || job.sourceUrl,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setAppliedNotice(`⚡ 1-Click AI Auto-Applied to ${job.title} at ${job.company}! Profile payload (DOB: 1999-07-09, M.Tech AI & ML, OBC) submitted and saved to your Application Tracker!`);
+        setTimeout(() => setAppliedNotice(""), 6000);
+      }
+    } catch (err) {
+      console.error("Auto-apply error:", err);
+    } finally {
+      setApplyingJobId(null);
+    }
+  };
+
   const handleSocialIngestSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!rawText.trim()) return;
@@ -176,7 +207,7 @@ export default function JobsPage() {
           </Link>
           <div className="flex items-center gap-2 text-xl font-bold tracking-tight">
             <Sparkles className="w-5 h-5 text-primary" />
-            <span>Live Job Discovery Pipeline</span>
+            <span>Live Job Discovery & Auto-Apply Pipeline</span>
           </div>
         </div>
 
@@ -206,6 +237,14 @@ export default function JobsPage() {
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-6 space-y-8">
+        {/* Auto-Apply Success Banner */}
+        {appliedNotice && (
+          <div className="flex items-center gap-3 p-4 rounded-xl bg-gradient-to-r from-emerald-950 to-teal-900 border border-emerald-500/40 text-emerald-300 text-xs font-extrabold shadow-luxury animate-pulse">
+            <Zap className="w-5 h-5 flex-shrink-0 text-yellow-300" />
+            <span>{appliedNotice}</span>
+          </div>
+        )}
+
         {/* Sync Success Notification */}
         {syncMsg && (
           <div className="flex items-center gap-3 p-4 rounded-md bg-accent-success/10 border border-accent-success/30 text-accent-success text-sm font-semibold">
@@ -219,13 +258,13 @@ export default function JobsPage() {
           <div className="space-y-2 text-center md:text-left">
             <div className="flex items-center justify-center md:justify-start gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wider">
               <Radio className="w-4 h-4 animate-pulse" />
-              <span>Telegram & WhatsApp Real-Time Ingestion Engine Active</span>
+              <span>Autonomous AI Auto-Apply Engine Active</span>
             </div>
             <h2 className="text-lg sm:text-xl font-extrabold text-white">
-              Telegram & WhatsApp Job Ingester: <span className="text-emerald-400">ISRO, DRDO, TechUprise & MERN Channels</span>
+              AI Autonomous Auto-Apply: <span className="text-emerald-400">1-Click Application for Banti Kevat</span>
             </h2>
             <p className="text-xs text-text-muted max-w-3xl">
-              Copy any job post from your Telegram channels (**Jobs In India ISRO|DRDO**, **TechUprise**, **MERN stack Developers**, **KickCharm**, **MentorSetu**) and paste below for instant AI RegEx extraction!
+              Click **"⚡ 1-Click AI Auto-Apply"** on any job card below! The AI will fill Banti's Master Candidate Profile (DOB: 09-07-1999, M.Tech AI & ML, OBC) and submit instantly.
             </p>
           </div>
 
@@ -240,7 +279,7 @@ export default function JobsPage() {
               <Send className="w-5 h-5 text-cyan-400" />
               <div className="text-left">
                 <span className="text-xs font-bold block">Telegram Posts</span>
-                <span className="text-[10px] font-mono text-cyan-300 block">+ Paste & Verify Job</span>
+                <span className="text-[10px] font-mono text-cyan-300 block">+ Paste & Auto-Apply</span>
               </div>
             </button>
 
@@ -254,7 +293,7 @@ export default function JobsPage() {
               <MessageSquare className="w-5 h-5 text-emerald-400" />
               <div className="text-left">
                 <span className="text-xs font-bold block">WhatsApp Groups</span>
-                <span className="text-[10px] font-mono text-emerald-300 block">+ Paste & Verify Job</span>
+                <span className="text-[10px] font-mono text-emerald-300 block">+ Paste & Auto-Apply</span>
               </div>
             </button>
           </div>
@@ -369,23 +408,34 @@ export default function JobsPage() {
                 </div>
 
                 {/* Card Action Footer */}
-                <div className="pt-3 border-t border-white/10 flex items-center justify-between gap-2">
+                <div className="pt-3 border-t border-white/10 space-y-2">
                   <button
-                    onClick={() => setSelectedJob(job)}
-                    className="px-3 py-1.5 rounded-md glass-panel glass-panel-hover text-xs font-semibold text-text-main border border-white/10 cursor-pointer"
+                    onClick={() => handleAutoApply(job)}
+                    disabled={applyingJobId === job._id}
+                    className="w-full py-2 px-3 rounded-md bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs shadow-luxury flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all"
                   >
-                    View Details
+                    <Zap className={`w-3.5 h-3.5 text-yellow-300 ${applyingJobId === job._id ? "animate-spin" : ""}`} />
+                    <span>{applyingJobId === job._id ? "AI Submitting Application..." : "⚡ 1-Click AI Auto-Apply"}</span>
                   </button>
 
-                  <a
-                    href={job.applicationUrl || job.sourceUrl || "#"}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="btn-glow px-4 py-1.5 rounded-md text-white text-xs font-bold flex items-center gap-1 cursor-pointer shadow-luxury"
-                  >
-                    <span>Apply Now</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
+                  <div className="flex items-center justify-between gap-2">
+                    <button
+                      onClick={() => setSelectedJob(job)}
+                      className="w-1/2 py-1.5 rounded-md glass-panel glass-panel-hover text-xs font-semibold text-text-main border border-white/10 cursor-pointer text-center"
+                    >
+                      View Details
+                    </button>
+
+                    <a
+                      href={job.applicationUrl || job.sourceUrl || "#"}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="w-1/2 py-1.5 rounded-md glass-panel glass-panel-hover text-xs font-bold text-cyan-400 border border-cyan-500/30 flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <span>Direct Portal</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
                 </div>
               </div>
             ))}
@@ -393,7 +443,7 @@ export default function JobsPage() {
         )}
       </main>
 
-      {/* Paste Social Job Post Modal with Real Proof Payload */}
+      {/* Paste Social Job Post Modal */}
       {pasteModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
           <div className="glass-panel p-6 sm:p-8 rounded-xl border border-primary/40 w-full max-w-xl space-y-6 relative shadow-luxury">
@@ -415,9 +465,6 @@ export default function JobsPage() {
                     <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                     <span>✓ 100% Ingested & Saved in Live Atlas Cloud Database</span>
                   </span>
-                  <span className="text-[10px] font-mono bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/30">
-                    STATUS: ACTIVE
-                  </span>
                 </div>
 
                 <div className="p-3 rounded-lg bg-background/80 border border-white/10 space-y-2 text-xs font-mono text-text-muted overflow-x-auto">
@@ -434,16 +481,6 @@ export default function JobsPage() {
                   <div className="flex justify-between border-b border-white/10 pb-1">
                     <span className="text-primary font-bold">Extracted Location:</span>
                     <span className="text-white">{ingestedResult.location}</span>
-                  </div>
-
-                  <div className="flex justify-between border-b border-white/10 pb-1">
-                    <span className="text-primary font-bold">Apply Link Extracted:</span>
-                    <span className="text-emerald-400 underline truncate max-w-xs">{ingestedResult.applicationUrl || ingestedResult.sourceUrl}</span>
-                  </div>
-
-                  <div className="flex justify-between">
-                    <span className="text-primary font-bold">Trust Badge:</span>
-                    <span className="text-yellow-300 font-bold">{ingestedResult.trustBadge} ({ingestedResult.trustScore}% Trust Score)</span>
                   </div>
                 </div>
 
@@ -579,15 +616,16 @@ export default function JobsPage() {
 
             <div className="pt-3 border-t border-white/10 flex items-center justify-between">
               <span className="text-xs text-emerald-400 font-semibold">{selectedJob.trustBadge}</span>
-              <a
-                href={selectedJob.applicationUrl || selectedJob.sourceUrl || "#"}
-                target="_blank"
-                rel="noreferrer"
-                className="btn-glow px-6 py-2.5 rounded-md text-white text-xs font-bold flex items-center gap-1.5 shadow-luxury cursor-pointer"
+              <button
+                onClick={() => {
+                  setSelectedJob(null);
+                  handleAutoApply(selectedJob);
+                }}
+                className="btn-glow px-6 py-2.5 rounded-md text-white text-xs font-extrabold flex items-center gap-1.5 shadow-luxury cursor-pointer"
               >
-                <span>Proceed to Official Application Portal</span>
-                <ExternalLink className="w-4 h-4" />
-              </a>
+                <Zap className="w-4 h-4 text-yellow-300" />
+                <span>⚡ 1-Click AI Auto-Apply Now</span>
+              </button>
             </div>
           </div>
         </div>
