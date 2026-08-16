@@ -187,6 +187,21 @@ export class SaasBillingService {
   }
 
   /**
+   * Consumes feature quota for metered usage
+   */
+  static async consumeFeatureQuota(userId: string, feature: "autoApplies" | "aiMatches" | "vaultStorage", amount = 1): Promise<boolean> {
+    const isAllowed = await this.checkFeatureEntitlement(userId, feature);
+    if (!isAllowed) return false;
+
+    const sub = await this.getUserSubscription(userId);
+    if (feature === "autoApplies") sub.autoAppliesUsed = (sub.autoAppliesUsed || 0) + amount;
+    if (feature === "aiMatches") sub.aiMatchesUsed = (sub.aiMatchesUsed || 0) + amount;
+    if (feature === "vaultStorage") sub.vaultStorageUsedMb = (sub.vaultStorageUsedMb || 0) + amount;
+
+    return true;
+  }
+
+  /**
    * Retrieves billing invoice history for candidate
    */
   static getUserInvoices(userId: string): InvoiceRecord[] {
