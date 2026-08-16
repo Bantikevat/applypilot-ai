@@ -87,6 +87,22 @@ describe("M06 — AI Job Matching & Eligibility Unit & Service Tests", () => {
     expect(eduFactor?.score).toBe(25);
   });
 
+  it("should NOT pass Education for candidate lacking specific professional requirement (e.g. 10th candidate applying for LLB)", () => {
+    const candidate = {
+      education: [{ degree: "10th" }],
+      skills: [],
+      experience: [],
+    };
+    const lawJob = {
+      educationRequirements: ["LLB"],
+      skills: [],
+      minExperienceYears: 0,
+    };
+    const result = JobMatchingService.evaluateMatch(candidate, lawJob);
+    const eduFactor = result.factors.find((f) => f.factor === "Education");
+    expect(eduFactor?.passed).toBe(false);
+  });
+
   it("should fail Education factor when candidate degree does not match required qualification tier", () => {
     const candidateWithBA = {
       personalInfo: { city: "Delhi" },

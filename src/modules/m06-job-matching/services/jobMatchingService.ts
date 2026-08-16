@@ -25,33 +25,34 @@ export interface JobMatchResult {
 }
 
 /**
- * Ordinal Degree Hierarchy Ranking Table
+ * Ordinal Degree Hierarchy Ranking Table & Professional Credentials Dictionary
  * Tier 5: Doctorate / Ph.D
- * Tier 4: Master's / M.Tech / M.E. / MCA / M.Sc / Post Graduation
- * Tier 3: Bachelor's / B.Tech / B.E. / BCA / B.Sc / Graduation
- * Tier 2: Diploma / Polytechnic
+ * Tier 4: Master's / M.Tech / M.E. / MCA / M.Sc / Post Graduation / CA / ICWA / LLM / MD / MS
+ * Tier 3: Bachelor's / B.Tech / B.E. / BCA / B.Sc / Graduation / LLB / MBBS / B.Ed
+ * Tier 2: Diploma / Polytechnic / ITI
  * Tier 1: 10+2 / 12th Pass / Higher Secondary / Intermediate
- * Tier 0: 10th Pass / SSLC
+ * Tier 0: 10th Pass / SSLC / Matriculation
  */
 const DEGREE_TIER_RANK: Record<string, number> = {
   "ph.d": 5, "phd": 5, "doctorate": 5,
-  "m.tech": 4, "m.e.": 4, "mca": 4, "m.sc": 4, "master": 4, "post graduation": 4, "pg": 4, "m.com": 4, "m.a.": 4, "mba": 4,
-  "b.tech": 3, "b.e.": 3, "bca": 3, "b.sc": 3, "bachelor": 3, "graduation": 3, "b.com": 3, "b.a.": 3, "bba": 3,
-  "diploma": 2, "polytechnic": 2,
+  "m.tech": 4, "m.e.": 4, "mca": 4, "m.sc": 4, "master": 4, "post graduation": 4, "pg": 4, "m.com": 4, "m.a.": 4, "mba": 4, "ca": 4, "icwa": 4, "llm": 4, "md": 4, "ms": 4,
+  "b.tech": 3, "b.e.": 3, "bca": 3, "b.sc": 3, "bachelor": 3, "graduation": 3, "b.com": 3, "b.a.": 3, "bba": 3, "llb": 3, "mbbs": 3, "b.ed": 3,
+  "diploma": 2, "polytechnic": 2, "iti": 2,
   "10+2": 1, "12th": 1, "higher secondary": 1, "intermediate": 1,
   "10th": 0, "sslc": 0, "matriculation": 0,
 };
 
 export class JobMatchingService {
   /**
-   * Evaluates ordinal degree rank for a qualification string
+   * Evaluates ordinal degree rank for a qualification string.
+   * Unrecognized requirement strings default to sentinel -1 so they do not auto-pass via rank comparisons.
    */
   private static getDegreeTierRank(degreeStr: string): number {
     const d = (degreeStr || "").toLowerCase();
     for (const [key, rank] of Object.entries(DEGREE_TIER_RANK)) {
       if (d.includes(key)) return rank;
     }
-    return 0;
+    return -1; // Sentinel -1: Unrecognized domain requirement
   }
 
   /**
@@ -113,7 +114,7 @@ export class JobMatchingService {
     const matchedSkills: string[] = [];
     const missingSkills: string[] = [];
 
-    // 1. Education Factor Evaluation (Weight: 25) — Ordinal Hierarchy Engine
+    // 1. Education Factor Evaluation (Weight: 25) — Disambiguated Ordinal Hierarchy Engine
     let eduScore = 25;
     let eduPassed = true;
     let eduReason = "Educational criteria satisfied.";
@@ -132,10 +133,16 @@ export class JobMatchingService {
 
         const matchesRequired = requiredEducation.some((reqStr: string) => {
           const reqLower = reqStr.toLowerCase();
-          const reqRank = this.getDegreeTierRank(reqLower);
+          const isDirectMatch = candidateDegreeTitles.some((candDeg: string) => candDeg.includes(reqLower) || reqLower.includes(candDeg));
+          if (isDirectMatch) return true;
 
-          // Direct title inclusion or ordinal rank comparison (Higher qualification satisfies lower requirement)
-          return candidateDegreeTitles.some((candDeg: string) => candDeg.includes(reqLower) || reqLower.includes(candDeg)) || candidateHighestRank >= reqRank;
+          const reqRank = this.getDegreeTierRank(reqLower);
+          // If requirement is unrecognized in dictionary (reqRank === -1), do NOT auto-pass via rank comparison
+          if (reqRank === -1) {
+            return false;
+          }
+
+          return candidateHighestRank >= reqRank;
         });
 
         if (!matchesRequired) {
