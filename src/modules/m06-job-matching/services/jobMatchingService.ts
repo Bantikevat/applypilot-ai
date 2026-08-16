@@ -24,7 +24,36 @@ export interface JobMatchResult {
   recommendation: string;
 }
 
+/**
+ * Ordinal Degree Hierarchy Ranking Table
+ * Tier 5: Doctorate / Ph.D
+ * Tier 4: Master's / M.Tech / M.E. / MCA / M.Sc / Post Graduation
+ * Tier 3: Bachelor's / B.Tech / B.E. / BCA / B.Sc / Graduation
+ * Tier 2: Diploma / Polytechnic
+ * Tier 1: 10+2 / 12th Pass / Higher Secondary / Intermediate
+ * Tier 0: 10th Pass / SSLC
+ */
+const DEGREE_TIER_RANK: Record<string, number> = {
+  "ph.d": 5, "phd": 5, "doctorate": 5,
+  "m.tech": 4, "m.e.": 4, "mca": 4, "m.sc": 4, "master": 4, "post graduation": 4, "pg": 4, "m.com": 4, "m.a.": 4, "mba": 4,
+  "b.tech": 3, "b.e.": 3, "bca": 3, "b.sc": 3, "bachelor": 3, "graduation": 3, "b.com": 3, "b.a.": 3, "bba": 3,
+  "diploma": 2, "polytechnic": 2,
+  "10+2": 1, "12th": 1, "higher secondary": 1, "intermediate": 1,
+  "10th": 0, "sslc": 0, "matriculation": 0,
+};
+
 export class JobMatchingService {
+  /**
+   * Evaluates ordinal degree rank for a qualification string
+   */
+  private static getDegreeTierRank(degreeStr: string): number {
+    const d = (degreeStr || "").toLowerCase();
+    for (const [key, rank] of Object.entries(DEGREE_TIER_RANK)) {
+      if (d.includes(key)) return rank;
+    }
+    return 0;
+  }
+
   /**
    * Normalizes technical skill names & handles special punctuation tokens (c++, c#, .net)
    */
@@ -84,7 +113,7 @@ export class JobMatchingService {
     const matchedSkills: string[] = [];
     const missingSkills: string[] = [];
 
-    // 1. Education Factor Evaluation (Weight: 25)
+    // 1. Education Factor Evaluation (Weight: 25) — Ordinal Hierarchy Engine
     let eduScore = 25;
     let eduPassed = true;
     let eduReason = "Educational criteria satisfied.";
@@ -99,60 +128,14 @@ export class JobMatchingService {
         eduReason = "Candidate has no education history recorded on file.";
       } else {
         const candidateDegreeTitles = candidateEducation.map((e: any) => (e.degree || e.level || "").toLowerCase());
-        
+        const candidateHighestRank = Math.max(...candidateDegreeTitles.map((d: string) => this.getDegreeTierRank(d)));
+
         const matchesRequired = requiredEducation.some((reqStr: string) => {
           const reqLower = reqStr.toLowerCase();
-          return candidateDegreeTitles.some((candidateDegree: string) => {
-            if (candidateDegree.includes(reqLower) || reqLower.includes(candidateDegree)) {
-              return true;
-            }
-            // 10+2 / Higher Secondary / SSC Tier
-            if (reqLower.includes("10+2") || reqLower.includes("12th") || reqLower.includes("higher secondary") || reqLower.includes("intermediate")) {
-              return (
-                candidateDegree.includes("12th") ||
-                candidateDegree.includes("10+2") ||
-                candidateDegree.includes("higher secondary") ||
-                candidateDegree.includes("intermediate") ||
-                candidateDegree.includes("diploma") ||
-                candidateDegree.includes("b.tech") ||
-                candidateDegree.includes("bachelor") ||
-                candidateDegree.includes("graduation")
-              );
-            }
-            // Diploma Tier
-            if (reqLower.includes("diploma") || reqLower.includes("polytechnic")) {
-              return (
-                candidateDegree.includes("diploma") ||
-                candidateDegree.includes("polytechnic") ||
-                candidateDegree.includes("b.tech") ||
-                candidateDegree.includes("b.e.") ||
-                candidateDegree.includes("bachelor")
-              );
-            }
-            // Bachelor Tier
-            if (reqLower.includes("bachelor") || reqLower.includes("b.tech") || reqLower.includes("b.e.") || reqLower.includes("graduation")) {
-              return (
-                candidateDegree.includes("b.tech") ||
-                candidateDegree.includes("b.e.") ||
-                candidateDegree.includes("bca") ||
-                candidateDegree.includes("b.sc") ||
-                candidateDegree.includes("bachelor") ||
-                candidateDegree.includes("graduation")
-              );
-            }
-            // Master Tier
-            if (reqLower.includes("master") || reqLower.includes("m.tech") || reqLower.includes("m.e.") || reqLower.includes("post graduation")) {
-              return (
-                candidateDegree.includes("m.tech") ||
-                candidateDegree.includes("m.e.") ||
-                candidateDegree.includes("mca") ||
-                candidateDegree.includes("m.sc") ||
-                candidateDegree.includes("master") ||
-                candidateDegree.includes("post graduation")
-              );
-            }
-            return false;
-          });
+          const reqRank = this.getDegreeTierRank(reqLower);
+
+          // Direct title inclusion or ordinal rank comparison (Higher qualification satisfies lower requirement)
+          return candidateDegreeTitles.some((candDeg: string) => candDeg.includes(reqLower) || reqLower.includes(candDeg)) || candidateHighestRank >= reqRank;
         });
 
         if (!matchesRequired) {
@@ -219,7 +202,7 @@ export class JobMatchingService {
         const isMatched = candidateSkillList.some((cs: string) => {
           const normCandidate = this.normalizeSkillToken(cs);
           
-          // Exact token match after normalization (e.g. cplusplus === cplusplus, c === c, csharp === csharp)
+          // Exact token match after normalization
           if (normCandidate === normJob) return true;
 
           // Word boundary match for distinct non-punctuated tokens

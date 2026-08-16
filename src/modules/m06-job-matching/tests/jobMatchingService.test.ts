@@ -61,7 +61,33 @@ describe("M06 — AI Job Matching & Eligibility Unit & Service Tests", () => {
     expect(result.missingSkills.length).toBe(0);
   });
 
-  it("should fail Education factor when candidate degree does not match required qualification", () => {
+  it("should pass Education factor for M.Tech candidate applying for Bachelor's or 10+2 jobs via Ordinal Rank Hierarchy", () => {
+    const mtechCandidate = {
+      personalInfo: { city: "Bangalore" },
+      education: [{ degree: "M.Tech in Artificial Intelligence", isPursuing: true }],
+      experience: [],
+      skills: ["Python"],
+    };
+
+    const btechJob = {
+      _id: "btech_job_1",
+      title: "Software Engineer",
+      company: "Google",
+      location: "Remote",
+      employmentType: "Full-time",
+      minExperienceYears: 0,
+      educationRequirements: ["Bachelor's Degree in CS"],
+      skills: ["Python"],
+    };
+
+    const result = JobMatchingService.evaluateMatch(mtechCandidate, btechJob);
+
+    const eduFactor = result.factors.find((f) => f.factor === "Education");
+    expect(eduFactor?.passed).toBe(true);
+    expect(eduFactor?.score).toBe(25);
+  });
+
+  it("should fail Education factor when candidate degree does not match required qualification tier", () => {
     const candidateWithBA = {
       personalInfo: { city: "Delhi" },
       education: [{ degree: "Bachelor of Arts (B.A.)" }],
