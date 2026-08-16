@@ -1,6 +1,7 @@
 import { ProfileService } from "@/modules/m02-profile/services/profileService";
 import { SkillGapService } from "@/modules/m07-skill-gap/services/skillGapService";
 import { ApplicationTrackerService } from "@/modules/m10-application-tracker/services/applicationTrackerService";
+import { CareerAnalyticsService } from "@/modules/m11-career-analytics/services/careerAnalyticsService";
 import { AdvisorTopic } from "../schemas/agentSchemas";
 
 export interface PromptChip {
@@ -17,6 +18,7 @@ export interface AgentResponse {
     pciScore: number;
     skillsCount: number;
     activeApplicationsCount: number;
+    topSalaryRangeLpa?: string;
   };
   suggestedNextSteps: string[];
 }
@@ -45,6 +47,12 @@ export const RECOMMENDED_PROMPT_CHIPS: PromptChip[] = [
     topic: "SKILL_UPGRADE",
     title: "Skill Upgrade Roadmap",
     prompt: "What critical technical skills am I missing to reach 100% readiness for Fullstack AI Engineer roles?",
+  },
+  {
+    id: "chip_salary",
+    topic: "SALARY_NEGOTIATION",
+    title: "Market Salary Benchmarks",
+    prompt: "What is the expected salary benchmark range for my experience level in Cloud & AI Engineering roles?",
   },
 ];
 
@@ -103,14 +111,17 @@ export class CareerAgentService {
   }
 
   /**
-   * Processes a candidate prompt using Context Fusion across M02, M07, and M10
+   * Processes a candidate prompt using Context Fusion across M02, M07, M10, and M11
    */
   static async processCareerPrompt(userId: string, prompt: string, topic: AdvisorTopic = "GENERAL_CAREER"): Promise<AgentResponse> {
     const { profile, completeness } = await ProfileService.getProfileByUserId(userId);
     const { metrics } = await ApplicationTrackerService.getUserApplications(userId);
+    const benchmarks = CareerAnalyticsService.getSalaryBenchmarks("fullstack-ai");
     const candidateTechSkills = profile?.skills?.technicalSkills || [];
 
-    const systemContext = `You are ApplyPilot AI Career Advisor. Candidate PCI Completeness: ${completeness.score}%. Verified Skills: ${candidateTechSkills.length}. Active Applications: ${metrics.totalCount}.`;
+    const topSalaryRange = benchmarks.length > 0 ? `${benchmarks[0].minLpa} - ${benchmarks[0].maxLpa} LPA` : "12 - 45 LPA";
+
+    const systemContext = `You are ApplyPilot AI Career Advisor. Candidate PCI Completeness: ${completeness.score}%. Verified Skills: ${candidateTechSkills.length}. Active Applications: ${metrics.totalCount}. Target Salary Range: ${topSalaryRange}.`;
 
     // Attempt External LLM API Call
     const llmReply = await this.invokeExternalLLM(systemContext, prompt);
@@ -155,11 +166,24 @@ export class CareerAgentService {
           "Log exam deadline in Candidate ATS (M10)",
           "Sync Government ASO benchmark in Skill Studio (M07)",
         ];
+      } else if (topic === "SALARY_NEGOTIATION" || lowerPrompt.includes("salary") || lowerPrompt.includes("lpa") || lowerPrompt.includes("compensation")) {
+        reply = `📊 **Market Compensation & Salary Negotiation Benchmarks (M11 Analytics)**:\n\n` +
+          `- **Fullstack AI Engineer**: **₹12 LPA (Min) | ₹24 LPA (Median) | ₹45 LPA (Max)** (Demand: VERY_HIGH)\n` +
+          `- **Backend & Cloud Architect**: **₹16 LPA (Min) | ₹30 LPA (Median) | ₹55 LPA (Max)** (Demand: VERY_HIGH)\n` +
+          `- **ML & AI Specialist**: **₹18 LPA (Min) | ₹32 LPA (Median) | ₹60 LPA (Max)** (Demand: VERY_HIGH)\n\n` +
+          `💡 *Negotiation Strategy*: Always negotiate based on value delivered and verified skill indices rather than past salary history alone.`;
+
+        suggestedNextSteps = [
+          "View full Salary Benchmarks in Career Analytics (M11)",
+          "Update target salary expectation in Master Profile (M02)",
+          "Review top paying Job Matches (M06)",
+        ];
       } else {
         reply = `Greetings! As your **ApplyPilot AI Career Advisor**, I analyzed your active career profile:\n\n` +
           `- **Master Profile Completeness**: **${completeness.score}%**\n` +
           `- **Logged Applications**: **${metrics.totalCount}** active entries in Candidate ATS\n` +
-          `- **Active Skill Index**: **${candidateTechSkills.length}** technical skills verified\n\n` +
+          `- **Active Skill Index**: **${candidateTechSkills.length}** technical skills verified\n` +
+          `- **Target Salary Benchmark**: **${topSalaryRange}**\n\n` +
           `I am ready to help you optimize your resume, prepare for technical interviews, analyze skill gaps, or plan government exam roadmaps. What goal would you like to focus on today?`;
 
         suggestedNextSteps = [
@@ -183,6 +207,7 @@ export class CareerAgentService {
         pciScore: completeness.score,
         skillsCount: candidateTechSkills.length,
         activeApplicationsCount: metrics.totalCount,
+        topSalaryRangeLpa: topSalaryRange,
       },
       suggestedNextSteps,
     };

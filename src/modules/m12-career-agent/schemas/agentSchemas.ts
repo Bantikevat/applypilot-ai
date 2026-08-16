@@ -6,6 +6,8 @@ export const advisorTopicEnum = z.enum([
   "INTERVIEW_PREP",
   "GOVT_EXAM_PREP",
   "SKILL_UPGRADE",
+  "SALARY_NEGOTIATION",
+  "CAREER_PIVOT",
 ]);
 
 export const chatMessageInputSchema = z.object({
