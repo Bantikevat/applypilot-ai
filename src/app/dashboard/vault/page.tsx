@@ -388,11 +388,12 @@ export default function VaultPage() {
             </div>
 
             <div className="flex-1 overflow-auto rounded-md bg-surface-1/90 p-4 border border-white/5 flex items-center justify-center min-h-[400px]">
-              {previewDoc.mimeType.startsWith("image/") ? (
+              {(previewDoc.mimeType || "").startsWith("image/") || /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(previewDoc.originalFileName || "") ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
                 <img
                   src={`/api/v1/documents/${previewDoc._id}`}
                   alt={previewDoc.originalFileName}
-                  className="max-h-[60vh] object-contain rounded-md shadow-luxury"
+                  className="max-h-[60vh] max-w-full object-contain rounded-md shadow-luxury border border-white/10"
                 />
               ) : (
                 <iframe
