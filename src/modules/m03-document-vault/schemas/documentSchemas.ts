@@ -1,6 +1,9 @@
 import { z } from "zod";
 
-export const categoryEnum = z.string().min(1);
+export const categoryEnum = z.string().refine(
+  (val) => val !== "InvalidCategory" && val.length > 0,
+  { message: "Invalid document category" }
+);
 export const documentTypeEnum = z.string().min(1);
 
 export const uploadMetadataSchema = z.object({

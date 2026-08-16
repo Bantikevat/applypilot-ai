@@ -42,23 +42,6 @@ export class DocumentVaultService {
 
     const { storagePath } = await DocumentStorage.saveFile(userId, fileBuffer, originalFileName);
 
-    const docId = `doc_${Date.now()}`;
-    const memDoc: MemoryDocument = {
-      _id: docId,
-      userId,
-      category,
-      documentType,
-      originalFileName,
-      mimeType,
-      fileSize: fileBuffer.length,
-      storagePath,
-      verificationStatus: "UNVERIFIED",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    memoryVault.set(docId, memDoc);
-
     const db = await connectToDatabase();
 
     if (db) {
@@ -76,19 +59,36 @@ export class DocumentVaultService {
 
         return newDoc;
       } catch (err) {
-        console.warn("MongoDB offline/busy, saved document in Memory Store:", err);
+        console.warn("MongoDB offline/busy, saving document in Memory Store:", err);
       }
     }
 
+    const docId = `mem_doc_${Date.now()}`;
+    const memDoc: MemoryDocument = {
+      _id: docId,
+      userId,
+      category,
+      documentType,
+      originalFileName,
+      mimeType,
+      fileSize: fileBuffer.length,
+      storagePath,
+      verificationStatus: "UNVERIFIED",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    memoryVault.set(docId, memDoc);
     return memDoc;
   }
 
   /**
-   * Retrieves candidate vault documents (merging DB & Memory Vault so no document is ever lost)
+   * Retrieves candidate vault documents
    */
   static async getUserDocuments(userId: string, category?: string): Promise<Array<Partial<IDocumentVaultDocument | MemoryDocument>>> {
     const db = await connectToDatabase();
-    const resultsMap = new Map<string, any>();
+    const results: any[] = [];
+    const seenIds = new Set<string>();
 
     if (db) {
       try {
@@ -98,7 +98,8 @@ export class DocumentVaultService {
         }
         const dbDocs = await DocumentVault.find(query).sort({ createdAt: -1 });
         for (const doc of dbDocs) {
-          resultsMap.set(doc._id.toString(), doc);
+          results.push(doc);
+          seenIds.add(doc._id.toString());
         }
       } catch (err) {
         console.warn("MongoDB query warning:", err);
@@ -106,19 +107,26 @@ export class DocumentVaultService {
     }
 
     for (const [id, doc] of memoryVault.entries()) {
-      if (!category || category === "All" || doc.category === category) {
-        resultsMap.set(id, doc);
+      if (!seenIds.has(id)) {
+        if (!category || category === "All" || doc.category === category) {
+          results.push(doc);
+        }
       }
     }
 
-    const merged = Array.from(resultsMap.values());
-    return merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return results.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
   /**
    * Gets document metadata & verifies candidate tenant ownership
    */
   static async getDocumentById(userId: string, documentId: string): Promise<Partial<IDocumentVaultDocument | MemoryDocument>> {
+    // Check Memory Store first if documentId starts with mem_doc or doc_
+    const memDoc = memoryVault.get(documentId);
+    if (memDoc) {
+      return memDoc;
+    }
+
     const db = await connectToDatabase();
 
     if (db) {
@@ -128,27 +136,24 @@ export class DocumentVaultService {
           return doc;
         }
       } catch (err) {
-        console.warn("Error finding document by ID:", err);
+        console.warn("Error finding document by ID in MongoDB:", err);
       }
     }
 
-    const memDoc = memoryVault.get(documentId);
-    if (!memDoc) {
-      throw new NotFoundError("Requested document not found in Vault");
-    }
-
-    return memDoc;
+    throw new NotFoundError("Requested document not found in Vault");
   }
 
   /**
    * Deletes candidate document from storage and metadata record
    */
   static async deleteDocument(userId: string, documentId: string): Promise<boolean> {
-    const doc = await this.getDocumentById(userId, documentId);
+    try {
+      const doc = await this.getDocumentById(userId, documentId);
 
-    if (doc.storagePath) {
-      await DocumentStorage.deleteFile(doc.storagePath);
-    }
+      if (doc?.storagePath) {
+        await DocumentStorage.deleteFile(doc.storagePath);
+      }
+    } catch {}
 
     const db = await connectToDatabase();
     if (db) {

@@ -58,39 +58,33 @@ export async function GET(request: Request, { params }: { params: { documentId: 
     try {
       doc = await DocumentVaultService.getDocumentById(userId, params.documentId);
     } catch {
-      doc = {
-        documentType: "DigiLocker Verified Document",
-        originalFileName: `${params.documentId}.pdf`,
-        category: "Identity",
-        mimeType: "image/svg+xml",
-      };
+      doc = null;
     }
 
-    let fileBuffer: Buffer | null = null;
     if (doc?.storagePath) {
-      fileBuffer = await DocumentStorage.readFile(doc.storagePath);
+      const fileBuffer = await DocumentStorage.readFile(doc.storagePath);
+      if (fileBuffer) {
+        return new Response(new Uint8Array(fileBuffer), {
+          headers: {
+            "Content-Type": doc.mimeType || "application/octet-stream",
+            "Content-Disposition": `inline; filename="${doc.originalFileName || "document"}"`,
+            "Cache-Control": "private, no-cache, no-store, must-revalidate",
+          },
+        });
+      }
     }
 
-    if (!fileBuffer) {
-      const fallbackSvg = generateDocumentFallbackSvg(
-        doc?.documentType || "DigiLocker Document",
-        doc?.originalFileName || "document.pdf",
-        doc?.category || "Identity"
-      );
+    // Fallback SVG if file is virtual or missing on disk
+    const fallbackSvg = generateDocumentFallbackSvg(
+      doc?.documentType || "DigiLocker Document",
+      doc?.originalFileName || "document.pdf",
+      doc?.category || "Identity"
+    );
 
-      return new Response(Buffer.from(fallbackSvg), {
-        headers: {
-          "Content-Type": "image/svg+xml",
-          "Content-Disposition": `inline; filename="digilocker_document.svg"`,
-          "Cache-Control": "private, no-cache, no-store, must-revalidate",
-        },
-      });
-    }
-
-    return new Response(new Uint8Array(fileBuffer), {
+    return new Response(Buffer.from(fallbackSvg), {
       headers: {
-        "Content-Type": doc?.mimeType || "application/octet-stream",
-        "Content-Disposition": `inline; filename="${doc?.originalFileName || "document"}"`,
+        "Content-Type": "image/svg+xml",
+        "Content-Disposition": `inline; filename="digilocker_document.svg"`,
         "Cache-Control": "private, no-cache, no-store, must-revalidate",
       },
     });
