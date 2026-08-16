@@ -1,28 +1,12 @@
 import { DocumentVault, IDocumentVaultDocument } from "../models/DocumentVault";
-import { DocumentStorage } from "@/lib/storage/documentStorage";
+import { DocumentStorage, StoredDocumentMeta } from "@/lib/storage/documentStorage";
 import { ALLOWED_MIME_TYPES, MAX_FILE_SIZE_BYTES } from "../schemas/documentSchemas";
-import { ValidationError, NotFoundError, AuthError } from "@/lib/errors/AppError";
+import { ValidationError, NotFoundError } from "@/lib/errors/AppError";
 import { connectToDatabase } from "@/lib/db/mongoose";
-
-export interface MemoryDocument {
-  _id: string;
-  userId: string;
-  category: string;
-  documentType: string;
-  originalFileName: string;
-  mimeType: string;
-  fileSize: number;
-  storagePath: string;
-  verificationStatus: "UNVERIFIED" | "VERIFIED" | "REJECTED";
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-const memoryVault = new Map<string, MemoryDocument>();
 
 export class DocumentVaultService {
   /**
-   * Uploads & saves a new candidate document securely
+   * Uploads & saves a new candidate document securely (writing to MongoDB + Persistent Disk Index)
    */
   static async uploadDocument(
     userId: string,
@@ -31,7 +15,7 @@ export class DocumentVaultService {
     mimeType: string,
     category: string,
     documentType: string
-  ): Promise<Partial<IDocumentVaultDocument | MemoryDocument>> {
+  ): Promise<Partial<IDocumentVaultDocument | StoredDocumentMeta>> {
     if (!ALLOWED_MIME_TYPES.includes(mimeType) && !mimeType.startsWith("image/")) {
       throw new ValidationError(`Unsupported file format '${mimeType}'. Allowed formats: PDF, JPEG, PNG, WEBP.`);
     }
@@ -41,6 +25,24 @@ export class DocumentVaultService {
     }
 
     const { storagePath } = await DocumentStorage.saveFile(userId, fileBuffer, originalFileName);
+
+    const docId = `doc_${Date.now()}`;
+    const metaRecord: StoredDocumentMeta = {
+      _id: docId,
+      userId,
+      category,
+      documentType,
+      originalFileName,
+      mimeType,
+      fileSize: fileBuffer.length,
+      storagePath,
+      verificationStatus: "UNVERIFIED",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Save to Persistent Disk Index
+    DocumentStorage.saveDiskIndexRecord(metaRecord);
 
     const db = await connectToDatabase();
 
@@ -57,39 +59,38 @@ export class DocumentVaultService {
           verificationStatus: "UNVERIFIED",
         });
 
+        // Also update disk index record with MongoDB _id
+        const mongoMeta: StoredDocumentMeta = {
+          ...metaRecord,
+          _id: newDoc._id.toString(),
+        };
+        DocumentStorage.saveDiskIndexRecord(mongoMeta);
+
         return newDoc;
       } catch (err) {
-        console.warn("MongoDB offline/busy, saving document in Memory Store:", err);
+        console.warn("[DocumentVaultService] MongoDB save warning, document backed up in persistent disk index:", err);
       }
     }
 
-    const docId = `mem_doc_${Date.now()}`;
-    const memDoc: MemoryDocument = {
-      _id: docId,
-      userId,
-      category,
-      documentType,
-      originalFileName,
-      mimeType,
-      fileSize: fileBuffer.length,
-      storagePath,
-      verificationStatus: "UNVERIFIED",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    memoryVault.set(docId, memDoc);
-    return memDoc;
+    return metaRecord;
   }
 
   /**
-   * Retrieves candidate vault documents
+   * Retrieves candidate vault documents (merging MongoDB Atlas + Persistent Disk Index)
    */
-  static async getUserDocuments(userId: string, category?: string): Promise<Array<Partial<IDocumentVaultDocument | MemoryDocument>>> {
+  static async getUserDocuments(userId: string, category?: string): Promise<Array<Partial<IDocumentVaultDocument | StoredDocumentMeta>>> {
     const db = await connectToDatabase();
-    const results: any[] = [];
-    const seenIds = new Set<string>();
+    const resultsMap = new Map<string, any>();
 
+    // 1. Read from Persistent Disk Index
+    const diskDocs = DocumentStorage.getDiskIndex();
+    for (const d of diskDocs) {
+      if (!category || category === "All" || d.category === category) {
+        resultsMap.set(d._id, d);
+      }
+    }
+
+    // 2. Read from MongoDB Atlas Database
     if (db) {
       try {
         const query: any = {};
@@ -98,37 +99,30 @@ export class DocumentVaultService {
         }
         const dbDocs = await DocumentVault.find(query).sort({ createdAt: -1 });
         for (const doc of dbDocs) {
-          results.push(doc);
-          seenIds.add(doc._id.toString());
+          resultsMap.set(doc._id.toString(), doc);
         }
       } catch (err) {
-        console.warn("MongoDB query warning:", err);
+        console.warn("[DocumentVaultService] MongoDB query warning:", err);
       }
     }
 
-    for (const [id, doc] of memoryVault.entries()) {
-      if (!seenIds.has(id)) {
-        if (!category || category === "All" || doc.category === category) {
-          results.push(doc);
-        }
-      }
-    }
-
-    return results.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const merged = Array.from(resultsMap.values());
+    return merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
   /**
    * Gets document metadata & verifies candidate tenant ownership
    */
-  static async getDocumentById(userId: string, documentId: string): Promise<Partial<IDocumentVaultDocument | MemoryDocument>> {
-    // Check Memory Store first if documentId starts with mem_doc or doc_
-    const memDoc = memoryVault.get(documentId);
-    if (memDoc) {
-      return memDoc;
+  static async getDocumentById(userId: string, documentId: string): Promise<Partial<IDocumentVaultDocument | StoredDocumentMeta>> {
+    // 1. Check Persistent Disk Index
+    const diskDocs = DocumentStorage.getDiskIndex();
+    const foundDisk = diskDocs.find((d) => d._id === documentId);
+    if (foundDisk) {
+      return foundDisk;
     }
 
+    // 2. Check MongoDB Atlas Database
     const db = await connectToDatabase();
-
     if (db) {
       try {
         const doc = await DocumentVault.findById(documentId);
@@ -136,7 +130,7 @@ export class DocumentVaultService {
           return doc;
         }
       } catch (err) {
-        console.warn("Error finding document by ID in MongoDB:", err);
+        console.warn("[DocumentVaultService] Error finding document by ID in MongoDB:", err);
       }
     }
 
@@ -155,6 +149,8 @@ export class DocumentVaultService {
       }
     } catch {}
 
+    DocumentStorage.removeDiskIndexRecord(documentId);
+
     const db = await connectToDatabase();
     if (db) {
       try {
@@ -162,7 +158,6 @@ export class DocumentVaultService {
       } catch {}
     }
 
-    memoryVault.delete(documentId);
     return true;
   }
 }

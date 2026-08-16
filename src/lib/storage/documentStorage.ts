@@ -3,6 +3,21 @@ import path from "path";
 import crypto from "crypto";
 
 const UPLOADS_BASE_DIR = path.join(process.cwd(), "uploads", "vault");
+const VAULT_INDEX_FILE = path.join(UPLOADS_BASE_DIR, "vault_index.json");
+
+export interface StoredDocumentMeta {
+  _id: string;
+  userId: string;
+  category: string;
+  documentType: string;
+  originalFileName: string;
+  mimeType: string;
+  fileSize: number;
+  storagePath: string;
+  verificationStatus: "UNVERIFIED" | "VERIFIED" | "REJECTED";
+  createdAt: string;
+  updatedAt: string;
+}
 
 export class DocumentStorage {
   /**
@@ -14,6 +29,50 @@ export class DocumentStorage {
       fs.mkdirSync(userDir, { recursive: true });
     }
     return userDir;
+  }
+
+  /**
+   * Loads all document metadata records persistently from disk index
+   */
+  static getDiskIndex(): StoredDocumentMeta[] {
+    try {
+      if (fs.existsSync(VAULT_INDEX_FILE)) {
+        const content = fs.readFileSync(VAULT_INDEX_FILE, "utf-8");
+        return JSON.parse(content) || [];
+      }
+    } catch (err) {
+      console.warn("[DocumentStorage] Error reading vault_index.json from disk:", err);
+    }
+    return [];
+  }
+
+  /**
+   * Saves metadata record persistently to disk index
+   */
+  static saveDiskIndexRecord(doc: StoredDocumentMeta): void {
+    try {
+      if (!fs.existsSync(UPLOADS_BASE_DIR)) {
+        fs.mkdirSync(UPLOADS_BASE_DIR, { recursive: true });
+      }
+      const existing = this.getDiskIndex();
+      const updated = [doc, ...existing.filter((d) => d._id !== doc._id)];
+      fs.writeFileSync(VAULT_INDEX_FILE, JSON.stringify(updated, null, 2), "utf-8");
+    } catch (err) {
+      console.warn("[DocumentStorage] Error writing vault_index.json to disk:", err);
+    }
+  }
+
+  /**
+   * Removes metadata record persistently from disk index
+   */
+  static removeDiskIndexRecord(documentId: string): void {
+    try {
+      const existing = this.getDiskIndex();
+      const filtered = existing.filter((d) => d._id !== documentId);
+      fs.writeFileSync(VAULT_INDEX_FILE, JSON.stringify(filtered, null, 2), "utf-8");
+    } catch (err) {
+      console.warn("[DocumentStorage] Error deleting from vault_index.json:", err);
+    }
   }
 
   /**

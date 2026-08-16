@@ -80,8 +80,7 @@ const ExperienceSchema = new Schema<IExperience>({
 const ProfileSchema = new Schema<IProfileDocument>(
   {
     userId: {
-      type: Schema.Types.ObjectId,
-      ref: "User",
+      type: Schema.Types.Mixed,
       required: true,
       unique: true,
       index: true,

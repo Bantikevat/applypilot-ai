@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import { Profile, IProfileDocument } from "../models/Profile";
 import { UpdateProfileInput } from "../schemas/profileSchemas";
 import { connectToDatabase } from "@/lib/db/mongoose";
@@ -12,6 +14,28 @@ export interface ProfileCompletenessResult {
     skills: number;
     preferences: number;
   };
+}
+
+const PROFILE_DISK_DIR = path.join(process.cwd(), "uploads", "profile");
+const PROFILE_DISK_FILE = path.join(PROFILE_DISK_DIR, "banti_profile.json");
+
+function getDiskProfile(): any | null {
+  try {
+    if (fs.existsSync(PROFILE_DISK_FILE)) {
+      const data = fs.readFileSync(PROFILE_DISK_FILE, "utf-8");
+      return JSON.parse(data);
+    }
+  } catch {}
+  return null;
+}
+
+function saveDiskProfile(profile: any): void {
+  try {
+    if (!fs.existsSync(PROFILE_DISK_DIR)) {
+      fs.mkdirSync(PROFILE_DISK_DIR, { recursive: true });
+    }
+    fs.writeFileSync(PROFILE_DISK_FILE, JSON.stringify(profile, null, 2), "utf-8");
+  } catch {}
 }
 
 // Default Candidate Profile initialized with Banti Kevat's verified resume data & Date of Birth
@@ -139,9 +163,6 @@ export const BANTI_DEFAULT_PROFILE = {
   },
 };
 
-// In-Memory Profile Fallback when local MongoDB server is offline
-const memoryProfiles = new Map<string, any>();
-
 export class ProfileService {
   /**
    * Calculates Profile Completeness Index (PCI) and missing field radar
@@ -217,9 +238,11 @@ export class ProfileService {
   }
 
   /**
-   * Retrieves profile by userId, initializing default profile with candidate data if not present
+   * Retrieves profile by userId (merging MongoDB Atlas + Persistent Disk Backup)
    */
   static async getProfileByUserId(userId: string): Promise<{ profile: any; completeness: ProfileCompletenessResult }> {
+    let diskProfile = getDiskProfile();
+
     try {
       await connectToDatabase();
 
@@ -228,11 +251,10 @@ export class ProfileService {
       if (!profile) {
         profile = await Profile.create({
           userId,
-          ...BANTI_DEFAULT_PROFILE,
+          ...(diskProfile || BANTI_DEFAULT_PROFILE),
           completenessScore: 100,
         });
       } else {
-        // Ensure dateOfBirth is preserved
         if (!profile.personal?.dateOfBirth) {
           profile.personal = { ...profile.personal, dateOfBirth: "2002-05-15" };
         }
@@ -245,26 +267,26 @@ export class ProfileService {
         await profile.save();
       }
 
+      saveDiskProfile(profile.toObject ? profile.toObject() : profile);
+
       return { profile, completeness };
     } catch {
-      console.warn("MongoDB connection offline. Using In-Memory Profile store.");
+      console.warn("[ProfileService] MongoDB connection offline. Reading persistent disk profile backup.");
 
-      let memProfile = memoryProfiles.get(userId);
-      if (!memProfile) {
-        memProfile = {
-          userId,
-          ...BANTI_DEFAULT_PROFILE,
-          completenessScore: 100,
-        };
-        memoryProfiles.set(userId, memProfile);
-      } else {
-        if (!memProfile.personal?.dateOfBirth) {
-          memProfile.personal = { ...memProfile.personal, dateOfBirth: "2002-05-15" };
-        }
+      let memProfile = diskProfile || {
+        userId,
+        ...BANTI_DEFAULT_PROFILE,
+        completenessScore: 100,
+      };
+
+      if (!memProfile.personal?.dateOfBirth) {
+        memProfile.personal = { ...memProfile.personal, dateOfBirth: "2002-05-15" };
       }
 
       const completeness = this.calculateCompleteness(memProfile);
       memProfile.completenessScore = completeness.score;
+
+      saveDiskProfile(memProfile);
 
       return { profile: memProfile, completeness };
     }
@@ -274,6 +296,12 @@ export class ProfileService {
    * Updates profile data sections for a candidate
    */
   static async updateProfile(userId: string, data: UpdateProfileInput): Promise<{ profile: any; completeness: ProfileCompletenessResult }> {
+    let currentProfile = getDiskProfile() || {
+      userId,
+      ...BANTI_DEFAULT_PROFILE,
+      completenessScore: 100,
+    };
+
     try {
       await connectToDatabase();
 
@@ -285,61 +313,62 @@ export class ProfileService {
 
       if (data.personal) {
         profile.personal = { ...profile.personal, ...data.personal };
+        currentProfile.personal = { ...currentProfile.personal, ...data.personal };
       }
 
       if (data.education) {
         profile.education = data.education as any;
+        currentProfile.education = data.education;
       }
 
       if (data.experience) {
         profile.experience = data.experience as any;
+        currentProfile.experience = data.experience;
       }
 
       if (data.skills) {
         profile.skills = { ...profile.skills, ...data.skills };
+        currentProfile.skills = { ...currentProfile.skills, ...data.skills };
       }
 
       if (data.preferences) {
         profile.preferences = { ...profile.preferences, ...data.preferences };
+        currentProfile.preferences = { ...currentProfile.preferences, ...data.preferences };
       }
 
       const completeness = this.calculateCompleteness(profile);
       profile.completenessScore = completeness.score;
+      currentProfile.completenessScore = completeness.score;
 
       await profile.save();
+      saveDiskProfile(currentProfile);
 
       return { profile, completeness };
     } catch {
-      console.warn("MongoDB connection offline. Updating In-Memory Profile store.");
-
-      let memProfile = memoryProfiles.get(userId) || {
-        userId,
-        ...BANTI_DEFAULT_PROFILE,
-        completenessScore: 100,
-      };
+      console.warn("[ProfileService] MongoDB connection offline. Updating persistent disk profile backup.");
 
       if (data.personal) {
-        memProfile.personal = { ...memProfile.personal, ...data.personal };
+        currentProfile.personal = { ...currentProfile.personal, ...data.personal };
       }
       if (data.education) {
-        memProfile.education = data.education;
+        currentProfile.education = data.education;
       }
       if (data.experience) {
-        memProfile.experience = data.experience;
+        currentProfile.experience = data.experience;
       }
       if (data.skills) {
-        memProfile.skills = { ...memProfile.skills, ...data.skills };
+        currentProfile.skills = { ...currentProfile.skills, ...data.skills };
       }
       if (data.preferences) {
-        memProfile.preferences = { ...memProfile.preferences, ...data.preferences };
+        currentProfile.preferences = { ...currentProfile.preferences, ...data.preferences };
       }
 
-      const completeness = this.calculateCompleteness(memProfile);
-      memProfile.completenessScore = completeness.score;
+      const completeness = this.calculateCompleteness(currentProfile);
+      currentProfile.completenessScore = completeness.score;
 
-      memoryProfiles.set(userId, memProfile);
+      saveDiskProfile(currentProfile);
 
-      return { profile: memProfile, completeness };
+      return { profile: currentProfile, completeness };
     }
   }
 }

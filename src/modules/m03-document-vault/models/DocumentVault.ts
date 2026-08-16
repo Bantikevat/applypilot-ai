@@ -16,8 +16,7 @@ export interface IDocumentVaultDocument extends Document {
 const DocumentVaultSchema = new Schema<IDocumentVaultDocument>(
   {
     userId: {
-      type: Schema.Types.ObjectId,
-      ref: "User",
+      type: Schema.Types.Mixed,
       required: true,
       index: true,
     },
