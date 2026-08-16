@@ -46,7 +46,7 @@ export class JobMatchingService {
     for (const exp of experienceRecords) {
       if (!exp.startDate) continue;
       const start = new Date(exp.startDate);
-      const end = exp.isCurrentRole || !exp.endDate ? new Date() : new Date(exp.endDate);
+      const end = exp.isCurrentRole || exp.isCurrent || !exp.endDate ? new Date() : new Date(exp.endDate);
 
       if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
         const months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
@@ -59,7 +59,12 @@ export class JobMatchingService {
   /**
    * Evaluates candidate profile against job criteria across 5 key dimensions
    */
-  static evaluateMatch(candidateProfile: any, job: any): JobMatchResult {
+  static evaluateMatch(rawCandidateProfile: any, job: any): JobMatchResult {
+    if (!job) {
+      throw new NotFoundError("Requested job vacancy not found for match evaluation.");
+    }
+
+    const candidateProfile = rawCandidateProfile?.profile || rawCandidateProfile || {};
     const factors: CriteriaFactorResult[] = [];
     const matchedSkills: string[] = [];
     const missingSkills: string[] = [];
@@ -73,15 +78,49 @@ export class JobMatchingService {
     const requiredEducation = job.educationRequirements || [];
 
     if (requiredEducation.length > 0) {
-      const candidateDegrees = candidateEducation.map((e: any) => (e.degree || "").toLowerCase());
-      const hasMatchingDegree = requiredEducation.some((req: string) =>
-        candidateDegrees.some((deg: string) => deg.includes(req.toLowerCase()) || req.toLowerCase().includes("graduation") || req.toLowerCase().includes("bachelor"))
-      );
-
-      if (!hasMatchingDegree && candidateEducation.length === 0) {
+      if (candidateEducation.length === 0) {
         eduPassed = false;
         eduScore = 5;
-        eduReason = "Missing educational qualifications specified in job requirement.";
+        eduReason = "Candidate has no education history recorded on file.";
+      } else {
+        const candidateDegreeTitles = candidateEducation.map((e: any) => (e.degree || e.level || "").toLowerCase());
+        
+        const matchesRequired = requiredEducation.some((reqStr: string) => {
+          const reqLower = reqStr.toLowerCase();
+          return candidateDegreeTitles.some((candidateDegree: string) => {
+            if (candidateDegree.includes(reqLower) || reqLower.includes(candidateDegree)) {
+              return true;
+            }
+            // Degree equivalence rules
+            if (reqLower.includes("bachelor") || reqLower.includes("b.tech") || reqLower.includes("b.e.") || reqLower.includes("graduation")) {
+              return (
+                candidateDegree.includes("b.tech") ||
+                candidateDegree.includes("b.e.") ||
+                candidateDegree.includes("bca") ||
+                candidateDegree.includes("b.sc") ||
+                candidateDegree.includes("bachelor") ||
+                candidateDegree.includes("graduation")
+              );
+            }
+            if (reqLower.includes("master") || reqLower.includes("m.tech") || reqLower.includes("m.e.") || reqLower.includes("post graduation")) {
+              return (
+                candidateDegree.includes("m.tech") ||
+                candidateDegree.includes("m.e.") ||
+                candidateDegree.includes("mca") ||
+                candidateDegree.includes("m.sc") ||
+                candidateDegree.includes("master") ||
+                candidateDegree.includes("post graduation")
+              );
+            }
+            return false;
+          });
+        });
+
+        if (!matchesRequired) {
+          eduPassed = false;
+          eduScore = 5;
+          eduReason = `Candidate degrees (${candidateDegreeTitles.join(", ")}) do not match required degree (${requiredEducation.join(", ")}).`;
+        }
       }
     }
     factors.push({ factor: "Education", passed: eduPassed, score: eduScore, maxScore: 25, reason: eduReason });
@@ -91,13 +130,20 @@ export class JobMatchingService {
     let agePassed = true;
     let ageReason = "Candidate age is within acceptable bounds.";
 
-    const candidateAge = this.calculateAge(candidateProfile?.personalInfo?.dateOfBirth);
+    const candidateDob = candidateProfile?.personal?.dateOfBirth || candidateProfile?.personalInfo?.dateOfBirth;
+    const candidateAge = this.calculateAge(candidateDob);
+
     if (job.employmentType === "Government") {
       if (candidateAge !== null) {
-        if (candidateAge < 20 || candidateAge > 32) {
+        const candidateCategory = candidateProfile?.personal?.category || candidateProfile?.personalInfo?.category || "General";
+        let maxGovtAge = 32;
+        if (candidateCategory === "OBC") maxGovtAge = 35;
+        if (candidateCategory === "SC" || candidateCategory === "ST") maxGovtAge = 37;
+
+        if (candidateAge < 20 || candidateAge > maxGovtAge) {
           agePassed = false;
           ageScore = 0;
-          ageReason = `Candidate age (${candidateAge} yrs) falls outside standard government limit (20-32 yrs).`;
+          ageReason = `Candidate age (${candidateAge} yrs, ${candidateCategory}) falls outside government age limit (20-${maxGovtAge} yrs).`;
         }
       }
     }
@@ -119,15 +165,26 @@ export class JobMatchingService {
     }
     factors.push({ factor: "Experience", passed: expPassed, score: expScore, maxScore: 25, reason: expReason });
 
-    // 4. Skills Match Evaluation (Weight: 25)
+    // 4. Skills Match Evaluation (Weight: 25) - Word Boundary Match Engine
     let skillScore = 25;
-    const candidateSkills = (candidateProfile?.skills || []).map((s: any) => (s.skillName || s || "").toLowerCase());
+    const rawSkills = candidateProfile?.skills?.technicalSkills || candidateProfile?.skills || [];
+    const candidateSkillList = (Array.isArray(rawSkills) ? rawSkills : []).map((s: any) => (typeof s === "string" ? s : s.skillName || "").toLowerCase());
     const jobSkills = job.skills || [];
 
     if (jobSkills.length > 0) {
       for (const js of jobSkills) {
         const jsLower = js.toLowerCase();
-        if (candidateSkills.some((cs: string) => cs.includes(jsLower) || jsLower.includes(cs))) {
+        
+        // Exact or word boundary match to prevent "Java" matching "JavaScript" or "C" matching "C++"
+        const isMatched = candidateSkillList.some((cs: string) => {
+          if (cs === jsLower) return true;
+          // Word boundary check for distinct skill tokens
+          const escapedJs = jsLower.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          const regex = new RegExp(`\\b${escapedJs}\\b`, "i");
+          return regex.test(cs);
+        });
+
+        if (isMatched) {
           matchedSkills.push(js);
         } else {
           missingSkills.push(js);
@@ -150,14 +207,14 @@ export class JobMatchingService {
     let locPassed = true;
     let locReason = "Location preference compatible.";
 
-    const candidateLocation = (candidateProfile?.personalInfo?.city || "").toLowerCase();
+    const candidateCity = (candidateProfile?.personal?.city || candidateProfile?.personalInfo?.city || "").toLowerCase();
     const jobLocation = (job.location || "").toLowerCase();
 
-    if (jobLocation.includes("remote") || candidateLocation === "" || jobLocation.includes(candidateLocation)) {
+    if (jobLocation.includes("remote") || candidateCity === "" || jobLocation.includes(candidateCity)) {
       locScore = 10;
     } else {
       locScore = 6;
-      locReason = `Job is in '${job.location}' while candidate is based in '${candidateProfile?.personalInfo?.city}'.`;
+      locReason = `Job is located in '${job.location}' while candidate is based in '${candidateProfile?.personal?.city || candidateProfile?.personalInfo?.city || "Unknown"}'.`;
     }
     factors.push({ factor: "Location", passed: locPassed, score: locScore, maxScore: 10, reason: locReason });
 
@@ -193,11 +250,11 @@ export class JobMatchingService {
   }
 
   /**
-   * Ranks candidate's top active jobs by AI Match Percentage
+   * Ranks candidate's top active jobs by AI Match Percentage across all sources
    */
   static async getCandidateMatchedJobs(userId: string): Promise<JobMatchResult[]> {
     const profile = await ProfileService.getProfileByUserId(userId);
-    const { jobs } = await JobDiscoveryService.searchJobs({ page: 1, limit: 20, sourceCategory: "All" });
+    const { jobs } = await JobDiscoveryService.searchJobs({ page: 1, limit: 100, sourceCategory: "All" });
 
     const results: JobMatchResult[] = [];
     for (const job of jobs) {

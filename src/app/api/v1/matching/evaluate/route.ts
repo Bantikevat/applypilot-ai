@@ -5,7 +5,7 @@ import { ProfileService } from "@/modules/m02-profile/services/profileService";
 import { JobDiscoveryService } from "@/modules/m05-job-discovery/services/jobDiscoveryService";
 import { JobMatchingService } from "@/modules/m06-job-matching/services/jobMatchingService";
 import { evaluateMatchRequestSchema } from "@/modules/m06-job-matching/schemas/matchingSchemas";
-import { AppError } from "@/lib/errors/AppError";
+import { AppError, NotFoundError } from "@/lib/errors/AppError";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +34,10 @@ export async function POST(request: Request) {
 
     const profile = await ProfileService.getProfileByUserId(payload.userId);
     const job = await JobDiscoveryService.getJobById(jobId);
+
+    if (!job) {
+      throw new NotFoundError("Requested job vacancy not found");
+    }
 
     const matchResult = JobMatchingService.evaluateMatch(profile, job);
 
