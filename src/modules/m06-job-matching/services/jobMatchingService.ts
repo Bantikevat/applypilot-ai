@@ -143,15 +143,16 @@ export class JobMatchingService {
           const reqLower = reqStr.toLowerCase();
           const isDirectMatch = candidateDegreeTitles.some((candDeg: string) => candDeg.includes(reqLower) || reqLower.includes(candDeg));
           
-          // Step 1: If direct title match succeeds, PASS IMMEDIATELY
+          // Step 1: Direct title match check (If direct match succeeds, return true immediately)
           if (isDirectMatch) return true;
 
-          // Step 2: Direction A — If job explicitly requires a professional credential (CA, LLB, MBBS), and direct match failed -> RETURN FALSE EARLY
-          if (PROFESSIONAL_CREDENTIALS.has(reqLower)) {
+          // Step 2: Direction A Gate — Substring-based matching for phrased requirements (e.g. "LLB Degree Required")
+          const isProfessionalReq = Array.from(PROFESSIONAL_CREDENTIALS).some((cred) => reqLower.includes(cred));
+          if (isProfessionalReq) {
             return false;
           }
 
-          // Step 3: Direction B — If candidate holds ONLY professional credentials (e.g. LLB), and job requires engineering degrees (B.Tech/M.Tech) -> RETURN FALSE EARLY
+          // Step 3: Direction B Gate — Substring-based matching for candidate's phrased professional degree (e.g. "Bachelor of Laws")
           const candidateHasOnlyProfessional = candidateDegreeTitles.every((candDeg: string) =>
             Array.from(PROFESSIONAL_CREDENTIALS).some((cred) => candDeg.includes(cred))
           );
@@ -159,13 +160,13 @@ export class JobMatchingService {
             return false;
           }
 
-          // Step 4: Check if requirement is in dictionary
+          // Step 4: Sentinel check — Unrecognized domain requirement guard
           const reqRank = this.getDegreeTierRank(reqLower);
           if (reqRank === -1) {
             return false;
           }
 
-          // Step 5: Fall through to Ordinal Rank Comparison (Higher academic qualification satisfies lower academic requirement)
+          // Step 5: Fall through to Academic Ordinal Rank Comparison (Higher academic qualification satisfies lower requirement)
           return candidateHighestRank >= reqRank;
         });
 
@@ -310,11 +311,12 @@ export class JobMatchingService {
   /**
    * Ranks candidate's top active jobs by AI Match Percentage across all sources
    * Uses dynamic unbounded pagination to fetch ALL canonical jobs without arbitrary ceilings.
+   * Includes error isolation per job record and pool truncation logging.
    */
   static async getCandidateMatchedJobs(userId: string): Promise<JobMatchResult[]> {
     const profile = await ProfileService.getProfileByUserId(userId);
     
-    // Unbounded Dynamic Pagination Engine: Fetches 100% of jobs using total count from searchJobs()
+    // Unbounded Dynamic Pagination Engine: Fetches jobs using total count contract from searchJobs()
     const allJobs: Array<any> = [];
     let page = 1;
     const limit = 100;
@@ -327,10 +329,20 @@ export class JobMatchingService {
       page++;
     } while (allJobs.length < total && page <= 50);
 
+    if (allJobs.length < total && page > 50) {
+      console.warn(`Job match pool truncated: fetched ${allJobs.length} of ${total} jobs for user ${userId}`);
+    }
+
+    // Error Isolation: One bad job record must not crash entire candidate match evaluation
     const results: JobMatchResult[] = [];
     for (const job of allJobs) {
-      const match = this.evaluateMatch(profile, job);
-      results.push(match);
+      try {
+        if (!job) continue;
+        const match = this.evaluateMatch(profile, job);
+        results.push(match);
+      } catch (err) {
+        console.warn(`Skipping unmatchable job record (${job?._id || job?.id || "unknown"}):`, err);
+      }
     }
 
     return results.sort((a, b) => b.matchScore - a.matchScore);

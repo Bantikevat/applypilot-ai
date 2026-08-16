@@ -18,7 +18,7 @@ describe("M06 — AI Job Matching & Eligibility Unit & Service Tests", () => {
     expect(age).toBeGreaterThanOrEqual(25);
   });
 
-  it("should throw NotFoundError if job object is null or undefined", () => {
+  it("should throw NotFoundError if job object is null or undefined in evaluateMatch", () => {
     expect(() => JobMatchingService.evaluateMatch({}, null)).toThrowError(NotFoundError);
   });
 
@@ -64,6 +64,14 @@ describe("M06 — AI Job Matching & Eligibility Unit & Service Tests", () => {
   it("should NOT rank BCA candidate as Master's tier due to 'ca' substring collision", () => {
     const candidate = { education: [{ degree: "BCA" }], skills: [], experience: [] };
     const job = { educationRequirements: ["M.Tech"], skills: [], minExperienceYears: 0 };
+    const result = JobMatchingService.evaluateMatch(candidate, job);
+    const eduFactor = result.factors.find((f) => f.factor === "Education");
+    expect(eduFactor?.passed).toBe(false);
+  });
+
+  it("should NOT pass B.Tech candidate for a phrased LLB requirement (e.g. 'LLB Degree Required')", () => {
+    const candidate = { education: [{ degree: "B.Tech" }], skills: [], experience: [] };
+    const job = { educationRequirements: ["LLB Degree Required"], skills: [], minExperienceYears: 0 };
     const result = JobMatchingService.evaluateMatch(candidate, job);
     const eduFactor = result.factors.find((f) => f.factor === "Education");
     expect(eduFactor?.passed).toBe(false);
