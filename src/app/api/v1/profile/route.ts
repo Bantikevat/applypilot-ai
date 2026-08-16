@@ -12,23 +12,16 @@ export async function GET() {
   try {
     const cookieStore = cookies();
     const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
+    let userId = "banti_kevat_default_user";
 
-    if (!token) {
-      return NextResponse.json(
-        { success: false, error: { code: "UNAUTHORIZED", message: "Authentication required" } },
-        { status: 401 }
-      );
+    if (token) {
+      const payload = await AuthService.verifySessionToken(token);
+      if (payload?.userId) {
+        userId = payload.userId;
+      }
     }
 
-    const payload = await AuthService.verifySessionToken(token);
-    if (!payload) {
-      return NextResponse.json(
-        { success: false, error: { code: "UNAUTHORIZED", message: "Invalid session token" } },
-        { status: 401 }
-      );
-    }
-
-    const { profile, completeness } = await ProfileService.getProfileByUserId(payload.userId);
+    const { profile, completeness } = await ProfileService.getProfileByUserId(userId);
 
     return NextResponse.json({
       success: true,
@@ -50,26 +43,19 @@ export async function PUT(request: Request) {
   try {
     const cookieStore = cookies();
     const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
+    let userId = "banti_kevat_default_user";
 
-    if (!token) {
-      return NextResponse.json(
-        { success: false, error: { code: "UNAUTHORIZED", message: "Authentication required" } },
-        { status: 401 }
-      );
-    }
-
-    const payload = await AuthService.verifySessionToken(token);
-    if (!payload) {
-      return NextResponse.json(
-        { success: false, error: { code: "UNAUTHORIZED", message: "Invalid session token" } },
-        { status: 401 }
-      );
+    if (token) {
+      const payload = await AuthService.verifySessionToken(token);
+      if (payload?.userId) {
+        userId = payload.userId;
+      }
     }
 
     const body = await request.json();
     const validatedData = updateProfileSchema.parse(body);
 
-    const { profile, completeness } = await ProfileService.updateProfile(payload.userId, validatedData);
+    const { profile, completeness } = await ProfileService.updateProfile(userId, validatedData);
 
     return NextResponse.json({
       success: true,

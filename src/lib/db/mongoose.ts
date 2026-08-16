@@ -1,6 +1,9 @@
 import mongoose from "mongoose";
 
-const MONGODB_URI = process.env.DATABASE_URL || "mongodb://localhost:27017/applypilot_dev";
+const MONGODB_URI =
+  process.env.MONGODB_URI ||
+  process.env.DATABASE_URL ||
+  "mongodb://localhost:27017/applypilot_dev";
 
 interface MongooseCache {
   conn: typeof mongoose | null;
@@ -24,16 +27,20 @@ export async function connectToDatabase(): Promise<typeof mongoose | null> {
   }
 
   if (!cached.promise) {
+    const isCloud = MONGODB_URI.includes("mongodb+srv://") || MONGODB_URI.includes("mongodb.net");
     const opts = {
       bufferCommands: false,
-      serverSelectionTimeoutMS: 500, // Instant 500ms check for local dev
+      serverSelectionTimeoutMS: isCloud ? 5000 : 1000, // 5s timeout for Atlas Cloud, 1s for Local
     };
 
     cached.promise = mongoose
       .connect(MONGODB_URI, opts)
-      .then((m) => m)
-      .catch(() => {
-        console.warn("Local MongoDB daemon offline. Switching to In-Memory Dev Engine.");
+      .then((m) => {
+        console.log(`[MongoDB Connection] Connected to Atlas Cloud Database cleanly.`);
+        return m;
+      })
+      .catch((err) => {
+        console.warn("MongoDB connection offline/failed. Switching to In-Memory Dev Engine:", err?.message || err);
         return null;
       });
   }

@@ -3,8 +3,8 @@ import { z } from "zod";
 export const personalInfoSchema = z.object({
   phone: z.string().optional(),
   dateOfBirth: z.string().optional(),
-  gender: z.enum(["Male", "Female", "Other", "Prefer not to say"]).optional(),
-  category: z.enum(["General", "OBC", "SC", "ST", "EWS", "Other"]).optional(),
+  gender: z.string().optional(),
+  category: z.string().optional(),
   city: z.string().optional(),
   state: z.string().optional(),
   country: z.string().optional(),
@@ -14,14 +14,14 @@ export const personalInfoSchema = z.object({
 
 export const educationItemSchema = z.object({
   id: z.string().optional(),
-  level: z.enum(["10th", "12th", "Diploma", "Graduation", "Post Graduation", "Certification", "Other"]),
+  level: z.string(),
   degree: z.string().min(1, "Degree/Course title is required"),
   institution: z.string().min(1, "Institution/School/College name is required"),
   boardOrUniversity: z.string().optional(),
-  yearOfPassing: z.number().min(1950).max(2035),
+  yearOfPassing: z.number().optional(),
   percentageOrCgpa: z.string().optional(),
   specialization: z.string().optional(),
-  isPursuing: z.boolean().default(false).optional(),
+  isPursuing: z.boolean().optional(),
 });
 
 export const experienceItemSchema = z.object({
@@ -29,9 +29,9 @@ export const experienceItemSchema = z.object({
   company: z.string().min(1, "Company name is required"),
   role: z.string().min(1, "Job role is required"),
   location: z.string().optional(),
-  startDate: z.string().min(1, "Start date is required"),
+  startDate: z.string().optional(),
   endDate: z.string().optional(),
-  isCurrent: z.boolean().default(false),
+  isCurrent: z.boolean().optional(),
   responsibilities: z.string().optional(),
 });
 
@@ -43,8 +43,8 @@ export const skillsSchema = z.object({
 });
 
 export const preferencesSchema = z.object({
-  preferredJobTypes: z.array(z.enum(["Government", "Private", "MNC", "Startup", "PSU"])).default([]),
-  preferredWorkModes: z.array(z.enum(["Remote", "Hybrid", "On-site"])).default([]),
+  preferredJobTypes: z.array(z.string()).default([]),
+  preferredWorkModes: z.array(z.string()).default([]),
   preferredLocations: z.array(z.string()).default([]),
   targetSalaryMin: z.number().optional(),
   targetRoles: z.array(z.string()).default([]),
