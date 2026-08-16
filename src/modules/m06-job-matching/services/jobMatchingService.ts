@@ -50,15 +50,25 @@ const PROFESSIONAL_CREDENTIALS = new Set(["ca", "icwa", "llb", "mbbs", "b.ed"]);
 
 export class JobMatchingService {
   /**
+   * Helper to perform word-boundary token matching to prevent sub-token collisions (e.g. "ca" inside "academic")
+   */
+  private static matchTokenWithBoundary(text: string, token: string): boolean {
+    if (!text || !token) return false;
+    const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`\\b${escaped}\\b`, "i").test(text);
+  }
+
+  /**
    * Evaluates ordinal degree rank for a qualification string.
    * Sorts dictionary keys by length descending to prevent substring collisions (e.g. "bca" matching "ca" prematurely).
+   * Uses word-boundary token matching to prevent sub-token collisions (e.g. "ms" in "systems").
    * Unrecognized requirement strings default to sentinel -1.
    */
   private static getDegreeTierRank(degreeStr: string): number {
     const d = (degreeStr || "").toLowerCase();
     const sortedKeys = Object.keys(DEGREE_TIER_RANK).sort((a, b) => b.length - a.length);
     for (const key of sortedKeys) {
-      if (d.includes(key)) return DEGREE_TIER_RANK[key];
+      if (this.matchTokenWithBoundary(d, key)) return DEGREE_TIER_RANK[key];
     }
     return -1; // Sentinel -1: Unrecognized domain requirement
   }
@@ -146,15 +156,17 @@ export class JobMatchingService {
           // Step 1: Direct title match check (If direct match succeeds, return true immediately)
           if (isDirectMatch) return true;
 
-          // Step 2: Direction A Gate — Substring-based matching for phrased requirements (e.g. "LLB Degree Required")
-          const isProfessionalReq = Array.from(PROFESSIONAL_CREDENTIALS).some((cred) => reqLower.includes(cred));
+          // Step 2: Direction A Gate — Word-boundary matching for professional credentials (prevents "ca" inside "academic")
+          const isProfessionalReq = Array.from(PROFESSIONAL_CREDENTIALS).some((cred) =>
+            this.matchTokenWithBoundary(reqLower, cred)
+          );
           if (isProfessionalReq) {
             return false;
           }
 
-          // Step 3: Direction B Gate — Substring-based matching for candidate's phrased professional degree (e.g. "Bachelor of Laws")
+          // Step 3: Direction B Gate — Word-boundary matching for candidate's professional degree (prevents "ca" inside "applications")
           const candidateHasOnlyProfessional = candidateDegreeTitles.every((candDeg: string) =>
-            Array.from(PROFESSIONAL_CREDENTIALS).some((cred) => candDeg.includes(cred))
+            Array.from(PROFESSIONAL_CREDENTIALS).some((cred) => this.matchTokenWithBoundary(candDeg, cred))
           );
           if (candidateHasOnlyProfessional && (reqLower.includes("b.tech") || reqLower.includes("m.tech") || reqLower.includes("b.e.") || reqLower.includes("m.e."))) {
             return false;

@@ -69,6 +69,22 @@ describe("M06 — AI Job Matching & Eligibility Unit & Service Tests", () => {
     expect(eduFactor?.passed).toBe(false);
   });
 
+  it("should NOT treat 'Academic' as a CA credential match for generic Bachelor's requirement", () => {
+    const candidate = { education: [{ degree: "B.Tech" }], skills: [], experience: [] };
+    const job = { educationRequirements: ["Bachelor's Degree (Academic Transcript Required)"], skills: [], minExperienceYears: 0 };
+    const result = JobMatchingService.evaluateMatch(candidate, job);
+    const eduFactor = result.factors.find((f) => f.factor === "Education");
+    expect(eduFactor?.passed).toBe(true);
+  });
+
+  it("should NOT treat 'B.Sc Computer Applications' candidate as professional-only credential holder", () => {
+    const candidate = { education: [{ degree: "B.Sc Computer Applications" }], skills: [], experience: [] };
+    const job = { educationRequirements: ["Bachelor's Degree"], skills: [], minExperienceYears: 0 };
+    const result = JobMatchingService.evaluateMatch(candidate, job);
+    const eduFactor = result.factors.find((f) => f.factor === "Education");
+    expect(eduFactor?.passed).toBe(true);
+  });
+
   it("should NOT pass B.Tech candidate for a phrased LLB requirement (e.g. 'LLB Degree Required')", () => {
     const candidate = { education: [{ degree: "B.Tech" }], skills: [], experience: [] };
     const job = { educationRequirements: ["LLB Degree Required"], skills: [], minExperienceYears: 0 };
