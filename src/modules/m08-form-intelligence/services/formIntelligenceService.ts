@@ -2,7 +2,6 @@ import { CANONICAL_FIELD_DICTIONARY, FieldMappingRule } from "../dictionary/fiel
 import { FormFieldInput } from "../schemas/formSchemas";
 import { ProfileService } from "@/modules/m02-profile/services/profileService";
 import { DocumentVaultService } from "@/modules/m03-document-vault/services/documentVaultService";
-import { AuthService } from "@/modules/m01-identity/services/authService";
 
 export interface MappedFieldPlanItem {
   fieldIdentifier: string;
@@ -25,6 +24,46 @@ export interface PreFillPlanResult {
   overallFormReadinessScore: number;
   plan: MappedFieldPlanItem[];
 }
+
+export const PORTAL_STANDARD_SCHEMAS: Record<string, FormFieldInput[]> = {
+  Workday: [
+    { fieldIdentifier: "workday.applicantName", label: "Full Name", isRequired: true },
+    { fieldIdentifier: "user.email", label: "Email Address", isRequired: true },
+    { fieldIdentifier: "personal.phone", label: "Phone Number", isRequired: true },
+    { fieldIdentifier: "workday.degree", label: "Highest Degree", isRequired: true },
+    { fieldIdentifier: "workday.school", label: "University", isRequired: false },
+    { fieldIdentifier: "workday.jobTitle", label: "Current Designation", isRequired: false },
+    { fieldIdentifier: "workday.company", label: "Current Employer", isRequired: false },
+    { fieldIdentifier: "vault.Resume", label: "Resume CV File", isRequired: true },
+  ],
+  Greenhouse: [
+    { fieldIdentifier: "greenhouse.candidate[first_name]", label: "First Name", isRequired: true },
+    { fieldIdentifier: "greenhouse.candidate[last_name]", label: "Last Name", isRequired: true },
+    { fieldIdentifier: "greenhouse.candidate[email]", label: "Email", isRequired: true },
+    { fieldIdentifier: "greenhouse.candidate[phone]", label: "Phone", isRequired: true },
+    { fieldIdentifier: "urls[linkedin]", label: "LinkedIn URL", isRequired: false },
+    { fieldIdentifier: "urls[github]", label: "GitHub URL", isRequired: false },
+    { fieldIdentifier: "greenhouse.resume", label: "Attach Resume", isRequired: true },
+  ],
+  Lever: [
+    { fieldIdentifier: "lever.name", label: "Full Name", isRequired: true },
+    { fieldIdentifier: "lever.email", label: "Email", isRequired: true },
+    { fieldIdentifier: "lever.phone", label: "Phone", isRequired: true },
+    { fieldIdentifier: "lever.urls[LinkedIn]", label: "LinkedIn", isRequired: false },
+    { fieldIdentifier: "lever.resume", label: "Resume/CV", isRequired: true },
+  ],
+  GovtOTR: [
+    { fieldIdentifier: "fullName", label: "Candidate Name", isRequired: true },
+    { fieldIdentifier: "fatherName", label: "Father's Name", isRequired: true },
+    { fieldIdentifier: "motherName", label: "Mother's Name", isRequired: true },
+    { fieldIdentifier: "dob", label: "Date of Birth", isRequired: true },
+    { fieldIdentifier: "gender", label: "Gender", isRequired: true },
+    { fieldIdentifier: "category", label: "Category", isRequired: true },
+    { fieldIdentifier: "aadhaar", label: "Aadhaar Number", isRequired: true },
+    { fieldIdentifier: "vault.Photograph", label: "Passport Photograph", isRequired: true },
+    { fieldIdentifier: "vault.Signature", label: "Signature Specimen", isRequired: true },
+  ],
+};
 
 export class FormIntelligenceService {
   /**
@@ -66,10 +105,9 @@ export class FormIntelligenceService {
       return { value: doc ? `/api/v1/documents/${doc._id}` : null, sourceModule: "M03 Document Vault" };
     }
 
-    // Profile path extraction (e.g. personal.fullName, education[0].degree)
     if (profilePath.startsWith("personal.")) {
       const key = profilePath.replace("personal.", "");
-      return { value: profile?.personal?.[key] || null, sourceModule: "M02 Master Profile" };
+      return { value: profile?.personal?.[key] || profile?.personalInfo?.[key] || null, sourceModule: "M02 Master Profile" };
     }
 
     if (profilePath.startsWith("education[0].")) {
@@ -148,5 +186,13 @@ export class FormIntelligenceService {
       overallFormReadinessScore: readinessScore,
       plan: planItems,
     };
+  }
+
+  /**
+   * Audits user profile readiness for a standard target portal schema (Workday, Greenhouse, Lever, GovtOTR)
+   */
+  static async auditPortalReadiness(userId: string, targetPortal: string): Promise<PreFillPlanResult> {
+    const fields = PORTAL_STANDARD_SCHEMAS[targetPortal] || PORTAL_STANDARD_SCHEMAS["Workday"];
+    return this.generatePreFillPlan(userId, targetPortal, fields);
   }
 }
