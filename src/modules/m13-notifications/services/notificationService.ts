@@ -67,6 +67,46 @@ export class NotificationService {
   }
 
   /**
+   * Trigger helper for high-score Job Match alerts
+   */
+  static async triggerJobMatchAlert(userId: string, jobTitle: string, company: string, matchScore: number, jobId?: string) {
+    return this.sendNotification(userId, {
+      title: `🎯 ${matchScore}% Match: ${jobTitle} at ${company}`,
+      message: `A new high-score job match (${matchScore}%) was discovered for your profile.`,
+      category: "JOB_MATCH_ALERT",
+      linkUrl: `/dashboard/matches?jobId=${jobId || ""}`,
+      actionText: "View Match Details",
+    });
+  }
+
+  /**
+   * Trigger helper for Application Deadline reminders
+   */
+  static async triggerDeadlineReminder(userId: string, jobTitle: string, company: string, deadlineDate: Date) {
+    const formattedDate = new Date(deadlineDate).toLocaleDateString();
+    return this.sendNotification(userId, {
+      title: `⏰ Application Deadline Approaching: ${jobTitle}`,
+      message: `The application deadline for ${company} is approaching on ${formattedDate}. Complete your pre-fill strategy now.`,
+      category: "DEADLINE_REMINDER",
+      linkUrl: "/dashboard/applications",
+      actionText: "Review Application",
+    });
+  }
+
+  /**
+   * Trigger helper for Application Status Update alerts
+   */
+  static async triggerStatusUpdateAlert(userId: string, jobTitle: string, company: string, oldStatus: string, newStatus: string) {
+    return this.sendNotification(userId, {
+      title: `📢 Application Status Update: ${jobTitle}`,
+      message: `Your application for ${company} transitioned from ${oldStatus} to ${newStatus}.`,
+      category: "APPLICATION_UPDATE",
+      linkUrl: "/dashboard/applications",
+      actionText: "Open Candidate ATS",
+    });
+  }
+
+  /**
    * Retrieves candidate notifications list and unread counter
    */
   static async getUserNotifications(userId: string, categoryFilter?: string): Promise<{ notifications: Array<Partial<INotificationDocument | MemoryNotification>>; unreadCount: number }> {
