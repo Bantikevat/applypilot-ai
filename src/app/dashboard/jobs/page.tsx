@@ -22,6 +22,7 @@ import {
   Radio,
   ClipboardPaste,
   PlusCircle,
+  ChevronDown,
 } from "lucide-react";
 
 interface CanonicalJob {
@@ -48,6 +49,17 @@ interface CanonicalJob {
 
 const CATEGORIES = ["All", "Government", "Tech MNCs", "Remote", "WhatsApp / Telegram"];
 
+const BANTI_TELEGRAM_PRESETS = [
+  "Jobs In India (ISRO | DRDO)",
+  "TechUprise - Exclusive Updates",
+  "Jobs/Internship All Batches",
+  "MERN stack Developers",
+  "KickCharm - Job Updates",
+  "MentorSetu | Job, internship",
+  "Learn Code With Durgesh",
+  "Frontend developers (React)",
+];
+
 export default function JobsPage() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
@@ -62,7 +74,7 @@ export default function JobsPage() {
   // Social Ingestion Modal State
   const [pasteModalOpen, setPasteModalOpen] = useState(false);
   const [socialSource, setSocialSource] = useState<"TELEGRAM" | "WHATSAPP">("TELEGRAM");
-  const [groupName, setGroupName] = useState("MERN stack Developers");
+  const [groupName, setGroupName] = useState("Jobs In India (ISRO | DRDO)");
   const [rawText, setRawText] = useState("");
   const [ingesting, setIngesting] = useState(false);
   const [ingestSuccess, setIngestSuccess] = useState("");
@@ -134,7 +146,7 @@ export default function JobsPage() {
 
       const data = await res.json();
       if (res.ok && data.success) {
-        setIngestSuccess(`SUCCESS! Job extracted from ${socialSource} post and saved to Live Database!`);
+        setIngestSuccess(`SUCCESS! Job extracted from '${groupName}' post and saved to Live Database!`);
         setRawText("");
         fetchJobs();
         setTimeout(() => {
@@ -206,13 +218,13 @@ export default function JobsPage() {
           <div className="space-y-2 text-center md:text-left">
             <div className="flex items-center justify-center md:justify-start gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wider">
               <Radio className="w-4 h-4 animate-pulse" />
-              <span>Telegram Groups & WhatsApp Channel Real-Time Ingestion Active</span>
+              <span>Telegram Channels & WhatsApp Groups Real-Time Ingestion Active</span>
             </div>
             <h2 className="text-lg sm:text-xl font-extrabold text-white">
-              Telegram & WhatsApp Job Ingester: <span className="text-emerald-400">Copy-Paste or Auto-Sync</span>
+              Telegram & WhatsApp Job Ingester: <span className="text-emerald-400">ISRO, DRDO, TechUprise & MERN Channels</span>
             </h2>
             <p className="text-xs text-text-muted max-w-3xl">
-              Found a job post in **MERN stack Developers**, **KickCharm**, **MentorSetu**, or WhatsApp? Click **"Paste Telegram / WhatsApp Job Post"** above or view synced social jobs below!
+              Copy any job post from your Telegram channels (**Jobs In India ISRO|DRDO**, **TechUprise**, **MERN stack Developers**, **KickCharm**, **MentorSetu**) and paste below for instant AI RegEx extraction!
             </p>
           </div>
 
@@ -248,7 +260,7 @@ export default function JobsPage() {
               <Search className="w-4 h-4 text-text-subtle absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Search job title, skills, or company (e.g. MERN, TCS NQT, Fullstack AI, Next.js)..."
+                placeholder="Search job title, skills, or company (e.g. ISRO, MERN, TCS NQT, Fullstack AI, Next.js)..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-9 pr-4 py-2.5 rounded-md bg-surface-1 border border-white/10 text-xs text-text-main focus:outline-none focus:border-primary font-semibold"
@@ -374,7 +386,7 @@ export default function JobsPage() {
         )}
       </main>
 
-      {/* Paste Social Job Post Modal */}
+      {/* Paste Social Job Post Modal with Banti Presets */}
       {pasteModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
           <div className="glass-panel p-6 sm:p-8 rounded-xl border border-primary/40 w-full max-w-lg space-y-6 relative shadow-luxury">
@@ -402,7 +414,10 @@ export default function JobsPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
-                    onClick={() => setSocialSource("TELEGRAM")}
+                    onClick={() => {
+                      setSocialSource("TELEGRAM");
+                      setGroupName(BANTI_TELEGRAM_PRESETS[0]);
+                    }}
                     className={`py-2 px-3 rounded-lg text-xs font-bold border flex items-center justify-center gap-2 cursor-pointer transition-all ${
                       socialSource === "TELEGRAM" ? "bg-cyan-500/20 border-cyan-400 text-cyan-300" : "bg-surface-1 border-white/10 text-text-muted"
                     }`}
@@ -413,7 +428,10 @@ export default function JobsPage() {
 
                   <button
                     type="button"
-                    onClick={() => setSocialSource("WHATSAPP")}
+                    onClick={() => {
+                      setSocialSource("WHATSAPP");
+                      setGroupName("MERN Stack Job Hiring India 🇮🇳");
+                    }}
                     className={`py-2 px-3 rounded-lg text-xs font-bold border flex items-center justify-center gap-2 cursor-pointer transition-all ${
                       socialSource === "WHATSAPP" ? "bg-emerald-500/20 border-emerald-400 text-emerald-300" : "bg-surface-1 border-white/10 text-text-muted"
                     }`}
@@ -424,16 +442,30 @@ export default function JobsPage() {
                 </div>
               </div>
 
-              {/* Group / Channel Name */}
+              {/* Group / Channel Selector & Custom Input */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-text-muted uppercase">Group / Channel Name</label>
-                <input
-                  type="text"
-                  placeholder="e.g. MERN stack Developers, KickCharm, MentorSetu"
-                  value={groupName}
-                  onChange={(e) => setGroupName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-lg bg-surface-1 border border-white/10 text-xs text-text-main font-semibold focus:border-primary focus:outline-none"
-                />
+                <label className="text-xs font-bold text-text-muted uppercase">Select or Enter Channel Name</label>
+                {socialSource === "TELEGRAM" ? (
+                  <select
+                    value={groupName}
+                    onChange={(e) => setGroupName(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-lg bg-surface-1 border border-white/10 text-xs text-text-main font-semibold focus:border-primary focus:outline-none"
+                  >
+                    {BANTI_TELEGRAM_PRESETS.map((preset) => (
+                      <option key={preset} value={preset} className="bg-background text-text-main">
+                        {preset}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    placeholder="e.g. MERN Stack Jobs India, Ujjain & Bhopal Opportunities"
+                    value={groupName}
+                    onChange={(e) => setGroupName(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-lg bg-surface-1 border border-white/10 text-xs text-text-main font-semibold focus:border-primary focus:outline-none"
+                  />
+                )}
               </div>
 
               {/* Message Text Area */}
@@ -442,7 +474,7 @@ export default function JobsPage() {
                 <textarea
                   rows={5}
                   required
-                  placeholder="Paste raw message text here... (e.g. Urgent Hiring: Senior MERN Developer at TechFlow Solutions. Location: Remote / Bhopal. Salary: 15 LPA. Apply at https://...)"
+                  placeholder="Paste raw message text here... (e.g. TCS NQT 2026 Registration is Live! BlackLine is hiring for Software Engineer at Remote...)"
                   value={rawText}
                   onChange={(e) => setRawText(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-lg bg-surface-1 border border-white/10 text-xs text-text-main font-mono focus:border-primary focus:outline-none leading-relaxed"
