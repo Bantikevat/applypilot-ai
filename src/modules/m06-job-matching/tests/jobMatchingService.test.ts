@@ -61,6 +61,22 @@ describe("M06 — AI Job Matching & Eligibility Unit & Service Tests", () => {
     expect(result.missingSkills.length).toBe(0);
   });
 
+  it("should NOT rank BCA candidate as Master's tier due to 'ca' substring collision", () => {
+    const candidate = { education: [{ degree: "BCA" }], skills: [], experience: [] };
+    const job = { educationRequirements: ["M.Tech"], skills: [], minExperienceYears: 0 };
+    const result = JobMatchingService.evaluateMatch(candidate, job);
+    const eduFactor = result.factors.find((f) => f.factor === "Education");
+    expect(eduFactor?.passed).toBe(false);
+  });
+
+  it("should NOT pass Education for B.Tech requirement when candidate holds non-engineering professional degree (LLB)", () => {
+    const llbCandidate = { education: [{ degree: "LLB" }], skills: [], experience: [] };
+    const btechJob = { educationRequirements: ["B.Tech"], skills: [], minExperienceYears: 0 };
+    const result = JobMatchingService.evaluateMatch(llbCandidate, btechJob);
+    const eduFactor = result.factors.find((f) => f.factor === "Education");
+    expect(eduFactor?.passed).toBe(false);
+  });
+
   it("should pass Education factor for M.Tech candidate applying for Bachelor's or 10+2 jobs via Ordinal Rank Hierarchy", () => {
     const mtechCandidate = {
       personalInfo: { city: "Bangalore" },

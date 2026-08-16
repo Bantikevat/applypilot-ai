@@ -25,32 +25,40 @@ export interface JobMatchResult {
 }
 
 /**
- * Ordinal Degree Hierarchy Ranking Table & Professional Credentials Dictionary
+ * Ordinal Degree Hierarchy Ranking Table for Academic Ladders
  * Tier 5: Doctorate / Ph.D
- * Tier 4: Master's / M.Tech / M.E. / MCA / M.Sc / Post Graduation / CA / ICWA / LLM / MD / MS
- * Tier 3: Bachelor's / B.Tech / B.E. / BCA / B.Sc / Graduation / LLB / MBBS / B.Ed
+ * Tier 4: Master's / M.Tech / M.E. / MCA / M.Sc / Post Graduation / M.Com / M.A. / MBA
+ * Tier 3: Bachelor's / B.Tech / B.E. / BCA / B.Sc / Graduation / B.Com / B.A. / BBA
  * Tier 2: Diploma / Polytechnic / ITI
  * Tier 1: 10+2 / 12th Pass / Higher Secondary / Intermediate
  * Tier 0: 10th Pass / SSLC / Matriculation
  */
 const DEGREE_TIER_RANK: Record<string, number> = {
   "ph.d": 5, "phd": 5, "doctorate": 5,
-  "m.tech": 4, "m.e.": 4, "mca": 4, "m.sc": 4, "master": 4, "post graduation": 4, "pg": 4, "m.com": 4, "m.a.": 4, "mba": 4, "ca": 4, "icwa": 4, "llm": 4, "md": 4, "ms": 4,
-  "b.tech": 3, "b.e.": 3, "bca": 3, "b.sc": 3, "bachelor": 3, "graduation": 3, "b.com": 3, "b.a.": 3, "bba": 3, "llb": 3, "mbbs": 3, "b.ed": 3,
+  "m.tech": 4, "m.e.": 4, "mca": 4, "m.sc": 4, "master": 4, "post graduation": 4, "pg": 4, "m.com": 4, "m.a.": 4, "mba": 4, "llm": 4, "md": 4, "ms": 4,
+  "b.tech": 3, "b.e.": 3, "bca": 3, "b.sc": 3, "bachelor": 3, "graduation": 3, "b.com": 3, "b.a.": 3, "bba": 3,
   "diploma": 2, "polytechnic": 2, "iti": 2,
   "10+2": 1, "12th": 1, "higher secondary": 1, "intermediate": 1,
   "10th": 0, "sslc": 0, "matriculation": 0,
 };
 
+/**
+ * Domain-Specific Professional Credentials
+ * These require direct title matching and cannot be substituted by unrelated academic degrees via ordinal rank comparison.
+ */
+const PROFESSIONAL_CREDENTIALS = new Set(["ca", "icwa", "llb", "mbbs", "b.ed"]);
+
 export class JobMatchingService {
   /**
    * Evaluates ordinal degree rank for a qualification string.
-   * Unrecognized requirement strings default to sentinel -1 so they do not auto-pass via rank comparisons.
+   * Sorts dictionary keys by length descending to prevent substring collisions (e.g. "bca" matching "ca" prematurely).
+   * Unrecognized requirement strings default to sentinel -1.
    */
   private static getDegreeTierRank(degreeStr: string): number {
     const d = (degreeStr || "").toLowerCase();
-    for (const [key, rank] of Object.entries(DEGREE_TIER_RANK)) {
-      if (d.includes(key)) return rank;
+    const sortedKeys = Object.keys(DEGREE_TIER_RANK).sort((a, b) => b.length - a.length);
+    for (const key of sortedKeys) {
+      if (d.includes(key)) return DEGREE_TIER_RANK[key];
     }
     return -1; // Sentinel -1: Unrecognized domain requirement
   }
@@ -135,6 +143,11 @@ export class JobMatchingService {
           const reqLower = reqStr.toLowerCase();
           const isDirectMatch = candidateDegreeTitles.some((candDeg: string) => candDeg.includes(reqLower) || reqLower.includes(candDeg));
           if (isDirectMatch) return true;
+
+          // Domain Separation: Professional Credentials (CA, LLB, MBBS) require direct title match and cannot auto-pass via generic ordinal rank
+          if (PROFESSIONAL_CREDENTIALS.has(reqLower)) {
+            return false;
+          }
 
           const reqRank = this.getDegreeTierRank(reqLower);
           // If requirement is unrecognized in dictionary (reqRank === -1), do NOT auto-pass via rank comparison
