@@ -69,12 +69,28 @@ describe("M06 — AI Job Matching & Eligibility Unit & Service Tests", () => {
     expect(eduFactor?.passed).toBe(false);
   });
 
-  it("should NOT pass Education for B.Tech requirement when candidate holds non-engineering professional degree (LLB)", () => {
+  it("should enforce symmetric bidirectional domain isolation (Direction 1: B.Tech candidate applying for LLB job -> FAILS)", () => {
+    const btechCandidate = { education: [{ degree: "B.Tech" }], skills: [], experience: [] };
+    const lawJob = { educationRequirements: ["LLB"], skills: [], minExperienceYears: 0 };
+    const result = JobMatchingService.evaluateMatch(btechCandidate, lawJob);
+    const eduFactor = result.factors.find((f) => f.factor === "Education");
+    expect(eduFactor?.passed).toBe(false);
+  });
+
+  it("should enforce symmetric bidirectional domain isolation (Direction 2: LLB candidate applying for B.Tech job -> FAILS)", () => {
     const llbCandidate = { education: [{ degree: "LLB" }], skills: [], experience: [] };
     const btechJob = { educationRequirements: ["B.Tech"], skills: [], minExperienceYears: 0 };
     const result = JobMatchingService.evaluateMatch(llbCandidate, btechJob);
     const eduFactor = result.factors.find((f) => f.factor === "Education");
     expect(eduFactor?.passed).toBe(false);
+  });
+
+  it("should pass Education when LLB candidate applies for generic Bachelor's requirement (Direction 3: LLB candidate applying for Bachelor's -> PASSES)", () => {
+    const llbCandidate = { education: [{ degree: "Bachelor of Laws (LLB)" }], skills: [], experience: [] };
+    const genericJob = { educationRequirements: ["Bachelor's Degree"], skills: [], minExperienceYears: 0 };
+    const result = JobMatchingService.evaluateMatch(llbCandidate, genericJob);
+    const eduFactor = result.factors.find((f) => f.factor === "Education");
+    expect(eduFactor?.passed).toBe(true);
   });
 
   it("should pass Education factor for M.Tech candidate applying for Bachelor's or 10+2 jobs via Ordinal Rank Hierarchy", () => {
@@ -101,22 +117,6 @@ describe("M06 — AI Job Matching & Eligibility Unit & Service Tests", () => {
     const eduFactor = result.factors.find((f) => f.factor === "Education");
     expect(eduFactor?.passed).toBe(true);
     expect(eduFactor?.score).toBe(25);
-  });
-
-  it("should NOT pass Education for candidate lacking specific professional requirement (e.g. 10th candidate applying for LLB)", () => {
-    const candidate = {
-      education: [{ degree: "10th" }],
-      skills: [],
-      experience: [],
-    };
-    const lawJob = {
-      educationRequirements: ["LLB"],
-      skills: [],
-      minExperienceYears: 0,
-    };
-    const result = JobMatchingService.evaluateMatch(candidate, lawJob);
-    const eduFactor = result.factors.find((f) => f.factor === "Education");
-    expect(eduFactor?.passed).toBe(false);
   });
 
   it("should fail Education factor when candidate degree does not match required qualification tier", () => {
