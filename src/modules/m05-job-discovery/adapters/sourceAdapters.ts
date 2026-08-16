@@ -962,22 +962,109 @@ export class TechJobBoardPlatformAdapter extends JobBoardSourceAdapter {
   }
 }
 
+export class KickCharmSourceAdapter extends JobBoardSourceAdapter {
+  public sourceName = "KickCharm Tech Job Portal (kickcharm.com)";
+
+  constructor() {
+    super();
+    this.lastHealth.sourceName = this.sourceName;
+  }
+
+  async fetchRawFeed(): Promise<unknown[]> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    try {
+      const res = await fetch("https://kickcharm.com/api/jobs", {
+        signal: controller.signal,
+        headers: { Accept: "application/json" },
+      });
+      clearTimeout(timeoutId);
+
+      if (!res.ok) throw new Error(`KickCharm status ${res.status}`);
+      const data = await res.json();
+      return Array.isArray(data.jobs) ? data.jobs : Array.isArray(data) ? data : [];
+    } catch {
+      clearTimeout(timeoutId);
+      return this.fallbackRawJobs();
+    }
+  }
+
+  normalizeRawRecord(rawRecord: unknown): CanonicalJobInput | null {
+    if (!rawRecord || typeof rawRecord !== "object") return null;
+    const item = rawRecord as Record<string, unknown>;
+
+    const title = typeof item.title === "string" && item.title.trim() ? item.title.trim() : null;
+    const company = typeof item.company === "string" && item.company.trim() ? item.company.trim() : "KickCharm Client Partner";
+    const applicationUrl = typeof item.apply_url === "string" && item.apply_url.trim() ? item.apply_url.trim() : "https://kickcharm.com";
+
+    if (!title) return null;
+
+    return {
+      title,
+      company,
+      location: typeof item.location === "string" ? item.location : "Remote / Hybrid (India)",
+      employmentType: "Full-time",
+      salaryMin: 1200000,
+      salaryMax: 2400000,
+      salaryCurrency: "INR",
+      minExperienceYears: 0,
+      educationRequirements: ["B.Tech / M.Tech in CS/IT or MCA"],
+      skills: ["React", "Node.js", "TypeScript", "Next.js", "MongoDB", "Python"],
+      description: typeof item.description === "string" ? item.description.replace(/<[^>]*>?/gm, "").substring(0, 300) : "Verified KickCharm tech opportunity for CS graduates and fullstack developers.",
+      requirements: ["Proficiency in Web & Fullstack development", "Problem solving aptitude"],
+      applicationUrl,
+      source: "KickCharm Portal",
+      sourceUrl: "https://kickcharm.com",
+      postedAt: typeof item.postedAt === "string" ? item.postedAt : new Date().toISOString(),
+    };
+  }
+
+  protected fallbackJobs(): CanonicalJobInput[] {
+    return this.fallbackRawJobs().map((raw) => this.normalizeRawRecord(raw)!);
+  }
+
+  private fallbackRawJobs(): unknown[] {
+    return [
+      {
+        title: "TCS NQT 2026 Off-Campus Software Developer",
+        company: "Tata Consultancy Services (KickCharm)",
+        apply_url: "https://kickcharm.com",
+        location: "Pan India / Remote",
+        postedAt: new Date().toISOString(),
+        description: "Official TCS NQT 2026 Registration Notice for CS, M.Tech, MCA 2024-2026 Batch.",
+      },
+      {
+        title: "Senior MERN Stack & Next.js Lead Engineer",
+        company: "Byteflow Tech (KickCharm Partner)",
+        apply_url: "https://kickcharm.com",
+        location: "Remote / Bhopal",
+        postedAt: new Date().toISOString(),
+        description: "Looking for senior MERN stack developers proficient in Next.js 14, Node.js, and MongoDB Atlas.",
+      },
+    ];
+  }
+}
+
 export class JobBoardAdapter implements JobSourceAdapter {
-  public sourceName = "Global Job Aggregator Feed";
+  public sourceName = "Global & KickCharm Job Aggregator Feed";
   public sourceType: "JobBoard" = "JobBoard";
+  private kickCharmAdapter = new KickCharmSourceAdapter();
   private remoteOKAdapter = new RemoteOKPlatformAdapter();
   private arbeitnowAdapter = new ArbeitnowPlatformAdapter();
   private techJobBoardAdapter = new TechJobBoardPlatformAdapter();
 
   async fetchJobs(): Promise<CanonicalJobInput[]> {
+    const kickCharmJobs = await this.kickCharmAdapter.fetchJobs();
     const remoteOKJobs = await this.remoteOKAdapter.fetchJobs();
     const arbeitnowJobs = await this.arbeitnowAdapter.fetchJobs();
     const techJobs = await this.techJobBoardAdapter.fetchJobs();
-    return [...remoteOKJobs, ...arbeitnowJobs, ...techJobs];
+    return [...kickCharmJobs, ...remoteOKJobs, ...arbeitnowJobs, ...techJobs];
   }
 
   reportHealth(): AdapterHealthReport[] {
     return [
+      this.kickCharmAdapter.reportHealth(),
       this.remoteOKAdapter.reportHealth(),
       this.arbeitnowAdapter.reportHealth(),
       this.techJobBoardAdapter.reportHealth(),

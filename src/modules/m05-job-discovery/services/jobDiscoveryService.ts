@@ -200,6 +200,13 @@ export class JobDiscoveryService {
           filter.source = { $regex: "Google|DeepMind|Tech", $options: "i" };
         } else if (cat === "remote") {
           filter.employmentType = "Remote";
+        } else if (cat.includes("kickcharm")) {
+          filter.$or = [
+            { sourceCategory: { $regex: "KickCharm", $options: "i" } },
+            { source: { $regex: "KickCharm", $options: "i" } },
+            { company: { $regex: "KickCharm", $options: "i" } },
+            { title: { $regex: "KickCharm|TCS NQT", $options: "i" } },
+          ];
         } else if (cat.includes("whatsapp") || cat.includes("telegram") || cat.includes("social")) {
           filter.$or = [
             { sourceCategory: { $regex: "WhatsApp|Telegram", $options: "i" } },

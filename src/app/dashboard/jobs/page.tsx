@@ -50,7 +50,7 @@ interface CanonicalJob {
   rawPayload?: any;
 }
 
-const CATEGORIES = ["All", "Government", "Tech MNCs", "Remote", "WhatsApp / Telegram"];
+const CATEGORIES = ["All", "Government", "Tech MNCs", "Remote", "WhatsApp / Telegram", "KickCharm Jobs"];
 
 const BANTI_TELEGRAM_PRESETS = [
   "Jobs In India (ISRO | DRDO)",
