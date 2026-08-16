@@ -1,0 +1,107 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* HSL Channel values for Tailwind opacity support */
+    --bg-dark: 224 25% 6%;
+    --surface-1: 224 22% 10%;
+    --surface-2: 224 20% 14%;
+    --glass-bg: rgba(17, 23, 38, 0.75);
+    
+    --primary: 262 83% 58%;
+    --primary-glow: rgba(139, 92, 246, 0.4);
+    --secondary: 187 92% 53%;
+    --secondary-glow: rgba(6, 182, 212, 0.4);
+    
+    --accent-success: 158 64% 52%;
+    --accent-warning: 38 92% 50%;
+    --accent-danger: 346 84% 61%;
+    
+    --text-main: 210 40% 98%;
+    --text-muted: 215 20% 65%;
+    --text-subtle: 215 15% 45%;
+    
+    /* Radii */
+    --radius-sm: 8px;
+    --radius-md: 14px;
+    --radius-lg: 24px;
+    --radius-full: 9999px;
+    
+    /* Shadows */
+    --shadow-luxury: 0 20px 50px -12px rgba(0, 0, 0, 0.7);
+    --shadow-glow: 0 0 25px var(--primary-glow);
+  }
+
+  body {
+    background-color: hsl(var(--bg-dark));
+    color: hsl(var(--text-main));
+    font-family: var(--font-plus-jakarta), system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Form Select Dropdown Options Styling for Dark Mode */
+  select option {
+    background-color: #111726;
+    color: #f1f5f9;
+  }
+
+  /* Custom Sleek Scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0b0f19;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #1e293b;
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #8b5cf6;
+  }
+}
+
+@layer utilities {
+  .glass-panel {
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: var(--shadow-luxury);
+  }
+
+  .glass-panel-hover {
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .glass-panel-hover:hover {
+    transform: translateY(-3px);
+    border-color: rgba(139, 92, 246, 0.4);
+    box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.8), 0 0 25px var(--primary-glow);
+  }
+
+  .text-gradient {
+    background: linear-gradient(135deg, hsl(262, 83%, 68%) 0%, hsl(187, 92%, 63%) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .btn-glow {
+    background: linear-gradient(135deg, hsl(262, 83%, 58%) 0%, hsl(187, 92%, 53%) 100%);
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .btn-glow:hover {
+    box-shadow: 0 0 30px rgba(139, 92, 246, 0.7), 0 0 15px rgba(6, 182, 212, 0.5);
+    transform: scale(1.02);
+  }
+
+  .btn-glow:active {
+    transform: scale(0.98);
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "ApplyPilot AI — Smart Job Application Assistant",
+  "version": "1.0.0",
+  "description": "Auto-fill job applications on SSC, UPSC, LinkedIn, and Workday with Human-In-The-Loop (HITL) approval safety.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "http://localhost:3000/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*/*", "http://localhost:3000/*"],
+      "js": ["contentScript.js"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "ApplyPilot AI Assistant"
+  }
+}
