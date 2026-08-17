@@ -25,6 +25,9 @@ import {
   ChevronDown,
   Zap,
   FileCheck,
+  Check,
+  UserCheck,
+  ThumbsUp,
 } from "lucide-react";
 
 interface CanonicalJob {
@@ -78,13 +81,14 @@ export default function JobsPage() {
   const [applyingJobId, setApplyingJobId] = useState<string | null>(null);
   const [autoApplyReceipt, setAutoApplyReceipt] = useState<any>(null);
 
-  // Social Ingestion Modal State
+  // Voice Workflow Social Inspection & Approval Modal State
   const [pasteModalOpen, setPasteModalOpen] = useState(false);
   const [socialSource, setSocialSource] = useState<"TELEGRAM" | "WHATSAPP">("TELEGRAM");
   const [groupName, setGroupName] = useState("Jobs In India (ISRO | DRDO)");
   const [rawText, setRawText] = useState("");
-  const [ingesting, setIngesting] = useState(false);
-  const [ingestedResult, setIngestedResult] = useState<any>(null);
+  const [inspecting, setInspecting] = useState(false);
+  const [draftResult, setDraftResult] = useState<any>(null);
+  const [approvalSuccess, setApprovalSuccess] = useState("");
 
   useEffect(() => {
     fetchJobs();
@@ -168,33 +172,67 @@ export default function JobsPage() {
     }
   };
 
-  const handleSocialIngestSubmit = async (e: React.FormEvent) => {
+  // Step 1-3: AI Inspect Link & Draft Form Payload
+  const handleInspectAndDraftSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!rawText.trim()) return;
 
-    setIngesting(true);
-    setIngestedResult(null);
+    setInspecting(true);
+    setDraftResult(null);
+    setApprovalSuccess("");
     try {
-      const endpoint = socialSource === "TELEGRAM" ? "/api/v1/jobs/telegram-webhook" : "/api/v1/jobs/whatsapp-webhook";
-      const res = await fetch(endpoint, {
+      const res = await fetch("/api/v1/assistant/inspect-and-draft", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messageText: rawText,
           groupName: groupName || (socialSource === "TELEGRAM" ? "Telegram Job Channel" : "WhatsApp Job Group"),
-          senderName: "Banti Personal Account",
+          source: socialSource,
         }),
       });
 
       const data = await res.json();
       if (res.ok && data.success) {
-        setIngestedResult(data.data?.job || data.data);
+        setDraftResult(data.data);
         fetchJobs();
       }
     } catch (err) {
-      console.error("Social job paste ingestion failed:", err);
+      console.error("Inspect & draft failed:", err);
     } finally {
-      setIngesting(false);
+      setInspecting(false);
+    }
+  };
+
+  // Step 4-5: Banti Approval & Final Submission
+  const handleApproveAndSubmit = async () => {
+    if (!draftResult) return;
+    setApprovalSuccess("");
+
+    try {
+      const res = await fetch("/api/v1/applications/auto-apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jobTitle: draftResult.parsedJob.title,
+          company: draftResult.parsedJob.company,
+          location: draftResult.parsedJob.location,
+          applicationUrl: draftResult.parsedJob.applicationUrl,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setApprovalSuccess(`🎉 Approved! Banti Kevat's application for ${draftResult.parsedJob.title} at ${draftResult.parsedJob.company} has been submitted & saved to ATS Tracker!`);
+        setTimeout(() => {
+          setApprovalSuccess("");
+          setDraftResult(null);
+          setRawText("");
+          setPasteModalOpen(false);
+          fetchJobs();
+        }, 2500);
+      }
+    } catch (err) {
+      console.error("Approval submit error:", err);
     }
   };
 
@@ -215,7 +253,7 @@ export default function JobsPage() {
           </Link>
           <div className="flex items-center gap-2 text-xl font-bold tracking-tight">
             <Sparkles className="w-5 h-5 text-primary" />
-            <span>Live Job Discovery & Auto-Apply Pipeline</span>
+            <span>AI Social Group Inspector & Auto-Apply Assistant</span>
           </div>
         </div>
 
@@ -231,13 +269,13 @@ export default function JobsPage() {
 
           <button
             onClick={() => {
-              setIngestedResult(null);
+              setDraftResult(null);
               setPasteModalOpen(true);
             }}
             className="px-4 py-2 rounded-md bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-bold shadow-luxury flex items-center gap-2 cursor-pointer transition-all"
           >
             <ClipboardPaste className="w-4 h-4 text-yellow-300 animate-bounce" />
-            <span>Paste Telegram / WhatsApp Job Post</span>
+            <span>Inspect Telegram / WhatsApp Job Post</span>
           </button>
 
           <button
@@ -261,25 +299,25 @@ export default function JobsPage() {
           </div>
         )}
 
-        {/* WhatsApp & Telegram Live Job Ingestion Banner */}
+        {/* WhatsApp & Telegram AI Assistant Voice Workflow Banner */}
         <div className="glass-panel p-6 rounded-lg border border-emerald-500/30 bg-gradient-to-r from-emerald-950/30 via-surface-1 to-teal-950/30 flex flex-col md:flex-row items-center justify-between gap-6 shadow-luxury">
           <div className="space-y-2 text-center md:text-left">
             <div className="flex items-center justify-center md:justify-start gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wider">
-              <Radio className="w-4 h-4 animate-pulse" />
-              <span>Autonomous AI Auto-Apply Engine Active</span>
+              <UserCheck className="w-4 h-4 animate-pulse" />
+              <span>Banti's Personal AI Assistant Workflow: Inspect • Eligibility Check • Fill Form Draft • Banti Approval</span>
             </div>
             <h2 className="text-lg sm:text-xl font-extrabold text-white">
-              AI Autonomous Auto-Apply: <span className="text-emerald-400">1-Click Application for Banti Kevat</span>
+              Banti's AI Assistant: <span className="text-emerald-400">Telegram & WhatsApp Group Job Inspector</span>
             </h2>
             <p className="text-xs text-text-muted max-w-3xl">
-              Click **"⚡ 1-Click AI Auto-Apply"** on any job card below! The AI will fill Banti's Master Candidate Profile (DOB: 09-07-1999, M.Tech AI & ML, OBC) and submit instantly.
+              Paste any job post from your Telegram/WhatsApp groups! The AI will inspect the link, verify your eligibility (M.Tech AI&ML, OBC, MERN experience), prepare the pre-filled form draft, and ask for your approval before final submission!
             </p>
           </div>
 
           <div className="flex items-center gap-3 border-t md:border-t-0 md:border-l border-white/10 pt-4 md:pt-0 md:pl-6 flex-shrink-0">
             <button
               onClick={() => {
-                setIngestedResult(null);
+                setDraftResult(null);
                 setPasteModalOpen(true);
               }}
               className="p-3 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 flex items-center gap-2.5 transition-all cursor-pointer"
@@ -287,13 +325,13 @@ export default function JobsPage() {
               <Send className="w-5 h-5 text-cyan-400" />
               <div className="text-left">
                 <span className="text-xs font-bold block">Telegram Posts</span>
-                <span className="text-[10px] font-mono text-cyan-300 block">+ Paste & Auto-Apply</span>
+                <span className="text-[10px] font-mono text-cyan-300 block">Inspect & Draft Form</span>
               </div>
             </button>
 
             <button
               onClick={() => {
-                setIngestedResult(null);
+                setDraftResult(null);
                 setPasteModalOpen(true);
               }}
               className="p-3 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 flex items-center gap-2.5 transition-all cursor-pointer"
@@ -301,7 +339,7 @@ export default function JobsPage() {
               <MessageSquare className="w-5 h-5 text-emerald-400" />
               <div className="text-left">
                 <span className="text-xs font-bold block">WhatsApp Groups</span>
-                <span className="text-[10px] font-mono text-emerald-300 block">+ Paste & Auto-Apply</span>
+                <span className="text-[10px] font-mono text-emerald-300 block">Inspect & Draft Form</span>
               </div>
             </button>
           </div>
@@ -363,7 +401,7 @@ export default function JobsPage() {
           <div className="p-12 text-center text-text-muted text-sm glass-panel rounded-lg border border-white/10 space-y-3">
             <Briefcase className="w-12 h-12 text-text-subtle mx-auto" />
             <p className="font-semibold text-text-main">No job postings found for current search filters</p>
-            <p className="text-xs text-text-subtle">Click "Paste Telegram / WhatsApp Job Post" above or click "Multi-Source Sync" to fetch live notices.</p>
+            <p className="text-xs text-text-subtle">Click "Inspect Telegram / WhatsApp Job Post" above or click "Multi-Source Sync" to fetch live notices.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -515,139 +553,184 @@ export default function JobsPage() {
         </div>
       )}
 
-      {/* Paste Social Job Post Modal */}
+      {/* Voice Workflow Social Inspection & Banti Approval Modal */}
       {pasteModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
           <div className="glass-panel p-6 sm:p-8 rounded-xl border border-primary/40 w-full max-w-xl space-y-6 relative shadow-luxury">
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <div className="flex items-center gap-2 text-base font-bold text-text-main">
-                <ClipboardPaste className="w-5 h-5 text-primary" />
-                <span>Parse & Verify Job Post from Telegram / WhatsApp</span>
+                <UserCheck className="w-5 h-5 text-primary" />
+                <span>Banti's Social Group Inspector & Form Auto-Filler</span>
               </div>
               <button onClick={() => setPasteModalOpen(false)} className="p-1.5 rounded-full hover:bg-white/10 text-text-muted cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Ingestion Verification Proof Box */}
-            {ingestedResult && (
-              <div className="p-4 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 space-y-3 shadow-luxury">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                    <span>✓ 100% Ingested & Saved in Live Atlas Cloud Database</span>
-                  </span>
-                </div>
-
-                <div className="p-3 rounded-lg bg-background/80 border border-white/10 space-y-2 text-xs font-mono text-text-muted overflow-x-auto">
-                  <div className="flex justify-between border-b border-white/10 pb-1">
-                    <span className="text-primary font-bold">Extracted Job Title:</span>
-                    <span className="text-white font-bold">{ingestedResult.title}</span>
-                  </div>
-
-                  <div className="flex justify-between border-b border-white/10 pb-1">
-                    <span className="text-primary font-bold">Company / Channel:</span>
-                    <span className="text-white">{ingestedResult.company}</span>
-                  </div>
-
-                  <div className="flex justify-between border-b border-white/10 pb-1">
-                    <span className="text-primary font-bold">Extracted Location:</span>
-                    <span className="text-white">{ingestedResult.location}</span>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => setPasteModalOpen(false)}
-                  className="w-full py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-luxury cursor-pointer"
-                >
-                  View Job Card on Dashboard Feed →
-                </button>
+            {/* Approval Success Alert */}
+            {approvalSuccess && (
+              <div className="p-4 rounded-xl bg-emerald-950 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-3 animate-pulse">
+                <CheckCircle2 className="w-6 h-6 text-emerald-400 flex-shrink-0" />
+                <span>{approvalSuccess}</span>
               </div>
             )}
 
-            <form onSubmit={handleSocialIngestSubmit} className="space-y-4">
-              {/* Source Toggle */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-text-muted uppercase">Select Platform Source</label>
-                <div className="grid grid-cols-2 gap-3">
+            {/* Step 3 & 4: AI Inspection Result & Pre-Filled Form Draft for Banti Approval */}
+            {draftResult ? (
+              <div className="space-y-4">
+                <div className="p-4 rounded-xl bg-surface-1 border border-primary/40 space-y-3">
+                  <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                    <span className="text-xs font-extrabold text-primary uppercase">1. Job Details Extracted</span>
+                    <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30 font-bold">
+                      {draftResult.eligibility.matchScore}% Match Score ({draftResult.eligibility.verdict})
+                    </span>
+                  </div>
+
+                  <div className="text-xs space-y-1 font-mono text-text-muted">
+                    <p><strong className="text-white">Role:</strong> {draftResult.parsedJob.title}</p>
+                    <p><strong className="text-white">Company:</strong> {draftResult.parsedJob.company}</p>
+                    <p><strong className="text-white">Location:</strong> {draftResult.parsedJob.location}</p>
+                    <p className="truncate"><strong className="text-white">Apply Link:</strong> <a href={draftResult.parsedJob.applicationUrl} target="_blank" className="text-cyan-400 underline">{draftResult.parsedJob.applicationUrl}</a></p>
+                  </div>
+                </div>
+
+                {/* Pre-Filled Form Payload */}
+                <div className="p-4 rounded-xl bg-background/90 border border-emerald-500/30 space-y-3">
+                  <span className="text-xs font-extrabold text-emerald-400 uppercase block border-b border-white/10 pb-2">
+                    2. AI Pre-Filled Candidate Form Payload (Banti Kevat)
+                  </span>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs font-mono text-text-muted">
+                    <div className="p-2 rounded bg-surface-1 border border-white/5">
+                      <span className="text-[10px] text-text-subtle block">Full Name</span>
+                      <span className="text-white font-bold">{draftResult.draftFormFields.fullName}</span>
+                    </div>
+
+                    <div className="p-2 rounded bg-surface-1 border border-white/5">
+                      <span className="text-[10px] text-text-subtle block">Date of Birth</span>
+                      <span className="text-white font-bold">{draftResult.draftFormFields.dateOfBirth}</span>
+                    </div>
+
+                    <div className="p-2 rounded bg-surface-1 border border-white/5">
+                      <span className="text-[10px] text-text-subtle block">Qualification</span>
+                      <span className="text-emerald-400 font-bold">{draftResult.draftFormFields.education}</span>
+                    </div>
+
+                    <div className="p-2 rounded bg-surface-1 border border-white/5">
+                      <span className="text-[10px] text-text-subtle block">Category</span>
+                      <span className="text-white font-bold">{draftResult.draftFormFields.category}</span>
+                    </div>
+
+                    <div className="p-2 rounded bg-surface-1 border border-white/5 col-span-2">
+                      <span className="text-[10px] text-text-subtle block">Email & Phone</span>
+                      <span className="text-white">{draftResult.draftFormFields.email} | {draftResult.draftFormFields.phone}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Banti Approval Actions */}
+                <div className="flex items-center gap-3 pt-2">
                   <button
-                    type="button"
-                    onClick={() => {
-                      setSocialSource("TELEGRAM");
-                      setGroupName(BANTI_TELEGRAM_PRESETS[0]);
-                    }}
-                    className={`py-2 px-3 rounded-lg text-xs font-bold border flex items-center justify-center gap-2 cursor-pointer transition-all ${
-                      socialSource === "TELEGRAM" ? "bg-cyan-500/20 border-cyan-400 text-cyan-300" : "bg-surface-1 border-white/10 text-text-muted"
-                    }`}
+                    onClick={() => setDraftResult(null)}
+                    className="w-1/3 py-3 rounded-lg glass-panel hover:bg-white/10 text-text-muted font-bold text-xs cursor-pointer"
                   >
-                    <Send className="w-4 h-4" />
-                    <span>Telegram Channel</span>
+                    ← Edit Post
                   </button>
 
                   <button
-                    type="button"
-                    onClick={() => {
-                      setSocialSource("WHATSAPP");
-                      setGroupName("MERN Stack Job Hiring India 🇮🇳");
-                    }}
-                    className={`py-2 px-3 rounded-lg text-xs font-bold border flex items-center justify-center gap-2 cursor-pointer transition-all ${
-                      socialSource === "WHATSAPP" ? "bg-emerald-500/20 border-emerald-400 text-emerald-300" : "bg-surface-1 border-white/10 text-text-muted"
-                    }`}
+                    onClick={handleApproveAndSubmit}
+                    className="w-2/3 py-3 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs shadow-luxury flex items-center justify-center gap-2 cursor-pointer transition-all"
                   >
-                    <MessageSquare className="w-4 h-4" />
-                    <span>WhatsApp Group</span>
+                    <ThumbsUp className="w-4 h-4 text-yellow-300" />
+                    <span>✅ Approve & Auto-Submit Application</span>
                   </button>
                 </div>
               </div>
+            ) : (
+              <form onSubmit={handleInspectAndDraftSubmit} className="space-y-4">
+                {/* Source Toggle */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-text-muted uppercase">Select Platform Source</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSocialSource("TELEGRAM");
+                        setGroupName(BANTI_TELEGRAM_PRESETS[0]);
+                      }}
+                      className={`py-2 px-3 rounded-lg text-xs font-bold border flex items-center justify-center gap-2 cursor-pointer transition-all ${
+                        socialSource === "TELEGRAM" ? "bg-cyan-500/20 border-cyan-400 text-cyan-300" : "bg-surface-1 border-white/10 text-text-muted"
+                      }`}
+                    >
+                      <Send className="w-4 h-4" />
+                      <span>Telegram Channel</span>
+                    </button>
 
-              {/* Group / Channel Selector & Custom Input */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-text-muted uppercase">Select or Enter Channel Name</label>
-                {socialSource === "TELEGRAM" ? (
-                  <select
-                    value={groupName}
-                    onChange={(e) => setGroupName(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-lg bg-surface-1 border border-white/10 text-xs text-text-main font-semibold focus:border-primary focus:outline-none"
-                  >
-                    {BANTI_TELEGRAM_PRESETS.map((preset) => (
-                      <option key={preset} value={preset} className="bg-background text-text-main">
-                        {preset}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    type="text"
-                    placeholder="e.g. MERN Stack Jobs India, Ujjain & Bhopal Opportunities"
-                    value={groupName}
-                    onChange={(e) => setGroupName(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-lg bg-surface-1 border border-white/10 text-xs text-text-main font-semibold focus:border-primary focus:outline-none"
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSocialSource("WHATSAPP");
+                        setGroupName("MERN Stack Job Hiring India 🇮🇳");
+                      }}
+                      className={`py-2 px-3 rounded-lg text-xs font-bold border flex items-center justify-center gap-2 cursor-pointer transition-all ${
+                        socialSource === "WHATSAPP" ? "bg-emerald-500/20 border-emerald-400 text-emerald-300" : "bg-surface-1 border-white/10 text-text-muted"
+                      }`}
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                      <span>WhatsApp Group</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Group / Channel Selector */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-text-muted uppercase">Select or Enter Channel Name</label>
+                  {socialSource === "TELEGRAM" ? (
+                    <select
+                      value={groupName}
+                      onChange={(e) => setGroupName(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-lg bg-surface-1 border border-white/10 text-xs text-text-main font-semibold focus:border-primary focus:outline-none"
+                    >
+                      {BANTI_TELEGRAM_PRESETS.map((preset) => (
+                        <option key={preset} value={preset} className="bg-background text-text-main">
+                          {preset}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      placeholder="e.g. MERN Stack Jobs India, Ujjain & Bhopal Opportunities"
+                      value={groupName}
+                      onChange={(e) => setGroupName(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-lg bg-surface-1 border border-white/10 text-xs text-text-main font-semibold focus:border-primary focus:outline-none"
+                    />
+                  )}
+                </div>
+
+                {/* Message Text Area */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-text-muted uppercase">Paste Message Text from Telegram / WhatsApp</label>
+                  <textarea
+                    rows={5}
+                    required
+                    placeholder="Paste raw message text here... (e.g. TCS NQT 2026 Registration is Live! Senior MERN Stack Developer at Remote...)"
+                    value={rawText}
+                    onChange={(e) => setRawText(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-lg bg-surface-1 border border-white/10 text-xs text-text-main font-mono focus:border-primary focus:outline-none leading-relaxed"
                   />
-                )}
-              </div>
+                </div>
 
-              {/* Message Text Area */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-text-muted uppercase">Paste Message Text from Telegram / WhatsApp</label>
-                <textarea
-                  rows={5}
-                  required
-                  placeholder="Paste raw message text here... (e.g. TCS NQT 2026 Registration is Live! BlackLine is hiring for Software Engineer at Remote...)"
-                  value={rawText}
-                  onChange={(e) => setRawText(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-lg bg-surface-1 border border-white/10 text-xs text-text-main font-mono focus:border-primary focus:outline-none leading-relaxed"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={ingesting}
-                className="btn-glow w-full py-3 rounded-lg font-bold text-xs text-white shadow-luxury disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <PlusCircle className={`w-4 h-4 ${ingesting ? "animate-spin" : ""}`} />
-                <span>{ingesting ? "AI RegEx Extracting & Saving..." : "AI RegEx Parse & Save to Dashboard"}</span>
-              </button>
-            </form>
+                <button
+                  type="submit"
+                  disabled={inspecting}
+                  className="btn-glow w-full py-3 rounded-lg font-bold text-xs text-white shadow-luxury disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Sparkles className={`w-4 h-4 ${inspecting ? "animate-spin" : ""}`} />
+                  <span>{inspecting ? "AI Inspecting Link & Preparing Form Draft..." : "AI Inspect Link & Prepare Pre-filled Form Draft"}</span>
+                </button>
+              </form>
+            )}
           </div>
         </div>
       )}
