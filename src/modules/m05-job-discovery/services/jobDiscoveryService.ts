@@ -200,6 +200,18 @@ export class JobDiscoveryService {
           filter.source = { $regex: "Google|DeepMind|Tech", $options: "i" };
         } else if (cat === "remote") {
           filter.employmentType = "Remote";
+        } else if (cat.includes("naukri")) {
+          filter.$or = [
+            { source: { $regex: "Naukri", $options: "i" } },
+            { sourceAdapter: { $regex: "Naukri", $options: "i" } },
+            { applicationUrl: { $regex: "naukri", $options: "i" } },
+          ];
+        } else if (cat.includes("workindia")) {
+          filter.$or = [
+            { source: { $regex: "WorkIndia", $options: "i" } },
+            { sourceAdapter: { $regex: "WorkIndia", $options: "i" } },
+            { applicationUrl: { $regex: "workindia", $options: "i" } },
+          ];
         } else if (cat.includes("kickcharm")) {
           filter.$or = [
             { sourceCategory: { $regex: "KickCharm", $options: "i" } },

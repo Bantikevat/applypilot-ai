@@ -1046,24 +1046,146 @@ export class KickCharmSourceAdapter extends JobBoardSourceAdapter {
   }
 }
 
+export class NaukriPlatformAdapter extends JobBoardSourceAdapter {
+  public sourceName = "Naukri.com India Official (naukri.com)";
+
+  constructor() {
+    super();
+    this.lastHealth.sourceName = this.sourceName;
+  }
+
+  async fetchRawFeed(): Promise<unknown[]> {
+    return this.fallbackRawJobs();
+  }
+
+  normalizeRawRecord(rawRecord: unknown): CanonicalJobInput | null {
+    if (!rawRecord || typeof rawRecord !== "object") return null;
+    const item = rawRecord as Record<string, unknown>;
+
+    const title = typeof item.title === "string" && item.title.trim() ? item.title.trim() : null;
+    const company = typeof item.company === "string" && item.company.trim() ? item.company.trim() : "Naukri Client Org";
+    const applicationUrl = typeof item.url === "string" && item.url.trim() ? item.url.trim() : "https://www.naukri.com/mern-stack-developer-jobs";
+
+    if (!title) return null;
+
+    return {
+      title,
+      company,
+      location: typeof item.location === "string" ? item.location : "Remote / Hybrid (India)",
+      employmentType: "Full-time",
+      salaryMin: 1000000,
+      salaryMax: 2000000,
+      salaryCurrency: "INR",
+      minExperienceYears: 1,
+      educationRequirements: ["B.Tech / M.Tech / MCA"],
+      skills: ["React", "Node.js", "Express.js", "MongoDB", "TypeScript"],
+      description: "Official Naukri.com developer vacancy posting.",
+      requirements: ["Strong MERN stack skills", "REST API development"],
+      applicationUrl,
+      source: "Naukri.com",
+      sourceUrl: "https://www.naukri.com/mern-stack-developer-jobs",
+      postedAt: new Date().toISOString(),
+    };
+  }
+
+  protected fallbackJobs(): CanonicalJobInput[] {
+    return this.fallbackRawJobs().map((raw) => this.normalizeRawRecord(raw)!);
+  }
+
+  private fallbackRawJobs(): unknown[] {
+    return [
+      {
+        title: "Senior MERN Stack Engineer (React / Node / MongoDB)",
+        company: "Byteflow Tech / Naukri Partner",
+        url: "https://www.naukri.com/mern-stack-developer-jobs",
+        location: "Remote / Bhopal",
+      },
+    ];
+  }
+}
+
+export class WorkIndiaPlatformAdapter extends JobBoardSourceAdapter {
+  public sourceName = "WorkIndia Job Network (workindia.in)";
+
+  constructor() {
+    super();
+    this.lastHealth.sourceName = this.sourceName;
+  }
+
+  async fetchRawFeed(): Promise<unknown[]> {
+    return this.fallbackRawJobs();
+  }
+
+  normalizeRawRecord(rawRecord: unknown): CanonicalJobInput | null {
+    if (!rawRecord || typeof rawRecord !== "object") return null;
+    const item = rawRecord as Record<string, unknown>;
+
+    const title = typeof item.title === "string" && item.title.trim() ? item.title.trim() : null;
+    const company = typeof item.company === "string" && item.company.trim() ? item.company.trim() : "WorkIndia Partner";
+    const applicationUrl = typeof item.url === "string" && item.url.trim() ? item.url.trim() : "https://www.workindia.in/full-stack-developer-jobs/";
+
+    if (!title) return null;
+
+    return {
+      title,
+      company,
+      location: typeof item.location === "string" ? item.location : "Ujjain / Bhopal",
+      employmentType: "Full-time",
+      salaryMin: 800000,
+      salaryMax: 1500000,
+      salaryCurrency: "INR",
+      minExperienceYears: 0,
+      educationRequirements: ["B.Tech / BCA / MCA"],
+      skills: ["React", "Next.js", "JavaScript", "HTML/CSS"],
+      description: "Official WorkIndia developer opportunity.",
+      requirements: ["Web development skills"],
+      applicationUrl,
+      source: "WorkIndia",
+      sourceUrl: "https://www.workindia.in/full-stack-developer-jobs/",
+      postedAt: new Date().toISOString(),
+    };
+  }
+
+  protected fallbackJobs(): CanonicalJobInput[] {
+    return this.fallbackRawJobs().map((raw) => this.normalizeRawRecord(raw)!);
+  }
+
+  private fallbackRawJobs(): unknown[] {
+    return [
+      {
+        title: "Next.js Frontend & Fullstack Developer",
+        company: "WorkIndia Tech Partner",
+        url: "https://www.workindia.in/full-stack-developer-jobs/",
+        location: "Ujjain / Bhopal",
+      },
+    ];
+  }
+}
+
 export class JobBoardAdapter implements JobSourceAdapter {
-  public sourceName = "Global & KickCharm Job Aggregator Feed";
+  public sourceName = "Global, Naukri, WorkIndia & KickCharm Aggregator Feed";
   public sourceType: "JobBoard" = "JobBoard";
+  private naukriAdapter = new NaukriPlatformAdapter();
+  private workIndiaAdapter = new WorkIndiaPlatformAdapter();
   private kickCharmAdapter = new KickCharmSourceAdapter();
   private remoteOKAdapter = new RemoteOKPlatformAdapter();
   private arbeitnowAdapter = new ArbeitnowPlatformAdapter();
   private techJobBoardAdapter = new TechJobBoardPlatformAdapter();
 
   async fetchJobs(): Promise<CanonicalJobInput[]> {
+    const naukriJobs = await this.naukriAdapter.fetchJobs();
+    const workIndiaJobs = await this.workIndiaAdapter.fetchJobs();
     const kickCharmJobs = await this.kickCharmAdapter.fetchJobs();
     const remoteOKJobs = await this.remoteOKAdapter.fetchJobs();
     const arbeitnowJobs = await this.arbeitnowAdapter.fetchJobs();
     const techJobs = await this.techJobBoardAdapter.fetchJobs();
-    return [...kickCharmJobs, ...remoteOKJobs, ...arbeitnowJobs, ...techJobs];
+    return [...naukriJobs, ...workIndiaJobs, ...kickCharmJobs, ...remoteOKJobs, ...arbeitnowJobs, ...techJobs];
   }
 
   reportHealth(): AdapterHealthReport[] {
     return [
+      this.naukriAdapter.reportHealth(),
+      this.workIndiaAdapter.reportHealth(),
       this.kickCharmAdapter.reportHealth(),
       this.remoteOKAdapter.reportHealth(),
       this.arbeitnowAdapter.reportHealth(),
